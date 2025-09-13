@@ -3,7 +3,6 @@ import {
   X,
   ExternalLink,
   Package,
-  DollarSign,
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
@@ -91,8 +90,9 @@ export function FurnitureDetailsModal({ isOpen, onClose, furniture }) {
               <div className="flex flex-wrap items-center gap-4">
                 {furniture.price && (
                   <div className="flex items-center gap-2 text-primary">
-                    <DollarSign className="w-5 h-5" />
-                    <span className="text-xl font-bold">{furniture.price}</span>
+                    <span className="text-xl font-bold">
+                      {furniture.price.startsWith('$') ? furniture.price : `$${furniture.price}`}
+                    </span>
                   </div>
                 )}
 

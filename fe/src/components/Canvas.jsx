@@ -187,7 +187,7 @@ export function Canvas({ onFurnitureClick }) {
 
     // Redraw all paths
     ctx.globalAlpha = 0.8
-    ctx.strokeStyle = '#8b5cf6'
+    ctx.strokeStyle = '#B854F6' // Matches theme primary color: hsl(270 95% 65%)
     // Scale line width based on canvas size
     ctx.lineWidth = Math.max(12, Math.min(24, canvas.width / 40))
     ctx.lineCap = 'round'
@@ -440,13 +440,16 @@ export function Canvas({ onFurnitureClick }) {
           <div
             className="absolute pointer-events-none z-50"
             style={{
-              left: dragPosition.x - 12,
-              top: dragPosition.y - 12
+              left: dragPosition.x - 14,
+              top: dragPosition.y - 14
             }}
           >
-            <div className="relative w-6 h-6">
-              <div className="absolute inset-0 bg-primary rounded-full animate-pulse opacity-60"></div>
-              <div className="absolute inset-1 bg-primary rounded-full"></div>
+            <div className="relative w-7 h-7">
+              {/* Subtle white border for contrast */}
+              <div className="absolute inset-0 bg-white/80 rounded-full shadow-sm"></div>
+              {/* Purple ring and dot */}
+              <div className="absolute inset-0.5 rounded-full animate-pulse opacity-60" style={{ backgroundColor: '#B854F6' }}></div>
+              <div className="absolute inset-1.5 rounded-full" style={{ backgroundColor: '#B854F6' }}></div>
             </div>
           </div>
         )}
@@ -461,8 +464,8 @@ export function Canvas({ onFurnitureClick }) {
               key={pin.id}
               className={`absolute group transition-opacity ${draggingPin === pin.id ? 'opacity-50' : 'opacity-100'}`}
               style={{
-                left: imgRect.left - containerRef.current?.getBoundingClientRect().left + pin.x * imgRect.width - 12,
-                top: imgRect.top - containerRef.current?.getBoundingClientRect().top + pin.y * imgRect.height - 12,
+                left: imgRect.left - containerRef.current?.getBoundingClientRect().left + pin.x * imgRect.width - 14,
+                top: imgRect.top - containerRef.current?.getBoundingClientRect().top + pin.y * imgRect.height - 14,
                 zIndex: 20
               }}
               draggable
@@ -492,10 +495,13 @@ export function Canvas({ onFurnitureClick }) {
                   e.stopPropagation()
                   onFurnitureClick(pin)
                 }}
-                className="relative w-6 h-6 cursor-move"
+                className="relative w-7 h-7 cursor-move"
               >
-                <div className="absolute inset-0 bg-primary rounded-full animate-pulse opacity-30"></div>
-                <div className="absolute inset-1 bg-primary rounded-full"></div>
+                {/* Subtle white border for contrast */}
+                <div className="absolute inset-0 bg-white/80 rounded-full shadow-sm"></div>
+                {/* Purple ring and dot */}
+                <div className="absolute inset-0.5 rounded-full animate-pulse opacity-30" style={{ backgroundColor: '#B854F6' }}></div>
+                <div className="absolute inset-1.5 rounded-full" style={{ backgroundColor: '#B854F6' }}></div>
               </button>
 
               {/* Delete button - using opacity transition instead of conditional rendering */}
