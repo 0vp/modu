@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from cerebras.cloud.sdk import Cerebras
 import hashlib
 from datetime import datetime
+import unicodedata
 
 load_dotenv()
 
@@ -81,53 +82,31 @@ def scrape():
         
         title = soup.find('title').text if soup.find('title') else 'No title found'
         
-        # Remove common non-content elements
-        for element in soup(['script', 'style', 'footer', 'nav', 'header', 'aside', 'form', 'noscript']):
+        # Remove only scripts and styles, keep all other content
+        for element in soup(['script', 'style', 'noscript']):
             element.decompose()
         
-        # Remove elements with common footer/header class names
-        for element in soup.find_all(class_=['footer', 'header', 'navigation', 'navbar', 'sidebar', 
-                                              'menu', 'cookie', 'consent', 'banner', 'advertisement',
-                                              'ads', 'social', 'share', 'subscribe', 'newsletter']):
-            element.decompose()
+        # Get ALL text content from the entire page
+        text_content = soup.get_text(separator=' ', strip=True)
         
-        # Remove elements with common footer/header IDs
-        for element in soup.find_all(id=['footer', 'header', 'navigation', 'navbar', 'sidebar',
-                                         'menu', 'cookie-banner', 'consent-banner']):
-            element.decompose()
-        
-        # Focus on main content areas
-        main_content = soup.find(['main', 'article']) or soup.find(class_=['content', 'main-content', 'post', 'entry']) or soup.body
-        
-        if main_content:
-            text_content = main_content.get_text(separator=' ', strip=True)
-        else:
-            text_content = soup.get_text(separator=' ', strip=True)
-        
-        # Extract product images with context
+        # Extract ALL images from the page
         images_with_context = []
         for img in soup.find_all('img'):
-            img_data = {
-                'src': img.get('src', ''),
-                'alt': img.get('alt', ''),
-                'title': img.get('title', ''),
-                'context': ''
-            }
-            
-            # Get context from parent elements
-            parent = img.parent
-            for _ in range(3):  # Look up to 3 levels up
+            img_src = img.get('src', '')
+            # Skip very small images (likely icons)
+            if img_src and not any(skip in img_src.lower() for skip in ['icon', 'logo', 'svg', 'data:image']):
+                img_data = {
+                    'src': img_src,
+                    'alt': img.get('alt', ''),
+                    'title': img.get('title', ''),
+                    'context': ''
+                }
+                
+                # Get surrounding text context
+                parent = img.parent
                 if parent:
-                    # Check for product-related classes
-                    if parent.get('class'):
-                        classes = ' '.join(parent.get('class', []))
-                        if 'product' in classes.lower() or 'item' in classes.lower():
-                            img_data['context'] = parent.get_text(strip=True)[:200]
-                            break
-                    parent = parent.parent if parent else None
-            
-            # Filter for product images (skip icons, logos, etc)
-            if img_data['src'] and any(keyword in img_data['src'].lower() for keyword in ['product', 'item', 'furniture', 'jpg', 'jpeg', 'png']):
+                    img_data['context'] = parent.get_text(strip=True)[:300]
+                
                 images_with_context.append(img_data)
         
         scraped_data = {
@@ -187,41 +166,47 @@ def analyze_products(scraped_data):
         api_key=os.environ.get("CEREBRAS_API_KEY")
     )
     
-    # Prepare the context for the AI
+    # Prepare the context for the AI - include MORE content
     context = f"""
     Page Title: {scraped_data.get('title', '')}
     
-    Page Content (first 3000 chars):
-    {scraped_data.get('content', '')[:3000]}
+    Full Page Content (first 10000 chars):
+    {scraped_data.get('content', '')[:]}
     
     Product Images Found ({len(scraped_data.get('product_images', []))} total):
     """
     
-    for img in scraped_data.get('product_images', [])[:10]:
+    # Include more images for better analysis
+    for img in scraped_data.get('product_images', [])[:30]:
         context += f"\n- Image: {img['src']}"
         if img['alt']:
             context += f"\n  Alt text: {img['alt']}"
         if img['context']:
-            context += f"\n  Context: {img['context'][:100]}"
+            context += f"\n  Context: {img['context'][:200]}"
     
-    system_prompt = """You are a furniture product data extractor. Analyze the provided webpage content and images to extract structured product information.
+    system_prompt = """You are a furniture product data extractor. Analyze the ENTIRE webpage content and ALL images to extract complete product information. Ensure that all image URLs are related to the product, and are not of other product images or logos on the page. Remove all parameters from the image URLs (such as ?f=u).
+    
+    IMPORTANT: Extract ALL available details including prices, dimensions, materials, colors, SKUs, and any other specifications mentioned ANYWHERE on the page.
     
     Return a JSON object with the following structure:
     {
         "products": [
             {
                 "title": "Product name",
-                "description": "One sentence description",
-                "price": "Price as shown or 'Price not available'",
-                "dimensions": "Dimensions if available or 'Not specified'",
-                "images": ["image_url1", "image_url2"],
-                "material": "Material if mentioned",
-                "color": "Color options if available"
+                "description": "Detailed description combining all available information",
+                "price": "Extract the exact price shown (look for $, CAD, regular price, sale price)",
+                "dimensions": "Extract ALL dimensions (width, height, depth, etc.)",
+                "images": ["image_url1", "image_url2", "image_url3"],
+                "material": "All materials mentioned",
+                "color": "All color options available",
+                "sku": "Product SKU or item number if available",
+                "availability": "In stock/out of stock if mentioned",
+                "features": "Any special features or specifications"
             }
         ]
     }
     
-    Focus on furniture products only. Extract as many products as you can identify from the content."""
+    Look through the ENTIRE content for product details - they may be scattered throughout the page."""
     
     completion = client.chat.completions.create(
         messages=[
@@ -250,7 +235,19 @@ def analyze_products(scraped_data):
         if json_start != -1 and json_end > json_start:
             json_str = response[json_start:json_end]
             parsed = json.loads(json_str)
-            return parsed.get('products', [])
+            products = parsed.get('products', [])
+            
+            # Clean up Unicode characters in all product fields using unicodedata
+            for product in products:
+                for key, value in product.items():
+                    if isinstance(value, str):
+                        # Normalize Unicode to ASCII equivalent
+                        value = unicodedata.normalize('NFKD', value)
+                        # Replace any remaining non-ASCII characters
+                        value = value.encode('ascii', 'ignore').decode('ascii')
+                        product[key] = value
+            
+            return products
     except json.JSONDecodeError:
         return []
     

@@ -1,30 +1,32 @@
 {
-  "c984d06aafbecf6bc55569f964148ea3": {
-    "url": "https://example.com",
+  "7a5933738ae7738d6ec85c341d6df51a": {
+    "url": "https://www.ikea.com/ca/en/p/finnala-sofa-gunnared-beige-s39319059/",
     "status_code": 200,
-    "title": "Example Domain",
-    "products": [],
-    "timestamp": "2025-09-13T11:03:07.770570"
-  },
-  "e973adf84b7b968997e0bc361aee5d53": {
-    "url": "https://www.leons.ca/products/fog-3-piece-queen-bed-package-white-black",
-    "status_code": 200,
-    "title": "Fog 3-Piece Queen Bed Package - White, Black | Leon's\n",
+    "title": "FINNALA sofa, Gunnared beige - IKEA CA",
     "products": [
       {
-        "title": "Fog 3-Piece Queen Bed Package - White, Black",
-        "description": "A stylish 3\u2011piece queen\u2011size bed set featuring a sleek white frame with black accents.",
-        "price": "Price not available",
-        "dimensions": "Not specified",
+        "title": "FINNALA Sofa, Gunnared beige",
+        "description": "The FINNALA threeseater sofa in Gunnared beige is a customizable sectional that can be built in different configurations to fit your space. It features pocketspring seat cushions with highresilience polyurethane foam and a top layer of polyester wadding for lasting comfort and support. The cover is made from dopedyed Gunnared fabric  100 % polyester (minimum 90 % recycled) with a woollike feel and a twotone melange effect  and is removable and machinewashable. The frame combines plywood, particleboard, solid wood, fiberboard and polypropylene legs, while the armrest and crossrail use steel with an epoxy/polyester powder coating. The sofa comes with a 10year limited warranty, softwashable cover, and a range of optional accessories. Dimensions (overall): Width 241 cm, Depth 98 cm, Height including back cushions 85 cm, Backrest height 71 cm, Height under furniture 6 cm. Seat width 211 cm, Seat depth 55 cm, Seat height 48 cm, Armrest width 15 cm, Armrest height 71 cm. Article Number (SKU): 393.190.59. Price: $999.00 (reduced from $1,349.00).",
+        "price": "$999.00",
+        "dimensions": "Width: 241 cm (94 7/8 \"); Depth: 98 cm (38 5/8 \"); Height including back cushions: 85 cm (33 1/2 \"); Backrest height: 71 cm (28 \"); Height under furniture: 6 cm (2 3/8 \"); Armrest width: 15 cm (5 7/8 \"); Armrest height: 71 cm (28 \"); Seat width: 211 cm (83 1/8 \"); Seat depth: 55 cm (21 5/8 \"); Seat height: 48 cm (18 7/8 \")",
         "images": [
-          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed_1.jpg?pad_color=fff&v=1606254740&width=1400",
-          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed.jpg?pad_color=fff&v=1606254740&width=1400",
-          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed_SW.jpg?pad_color=fff&v=1606254741&width=1400"
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0514366_pe639439_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0787232_pe763195_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0686033_pe721555_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0823119_pe641640_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0733543_ph152707_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0823121_pe641656_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0820541_pe641657_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0891165_ph168966_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0818972_pe774672_s5.jpg"
         ],
-        "material": "Material not specified",
-        "color": "White, Black"
+        "material": "Cover: dopedyed Gunnared fabric  100 % polyester (min 90 % recycled). Seat inner cushion: highresilience polyurethane foam with polyester wadding. Pocketspring unit: steel. Frame: plywood, particleboard, solid wood, fiberboard, polyurethane foam. Legs: polypropylene. Armrest frame: steel with polyester wadding. Crossrail: steel with epoxy/polyester powder coating. Back fabric: 100 % recycled polyester. Cover for armrest/section: 100 % polyester (min 90 % recycled).",
+        "color": "Gunnared beige",
+        "sku": "393.190.59",
+        "availability": "Availability not specified (check store)",
+        "features": "10year limited warranty; removable, machinewashable cover; softwashable cover; pocketspring seat cushions; highresilience foam; customizable sectional configuration; dopedyed fabric with woollike feel; recyclable materials; steel crossrail with powder coating; polypropylene legs"
       }
     ],
-    "timestamp": "2025-09-13T11:03:36.526325"
+    "timestamp": "2025-09-13T11:12:36.791980"
   }
 }
