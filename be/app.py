@@ -463,6 +463,52 @@ def save_canvas():
             "message": "Failed to save canvas images"
         }), 500
 
+@app.route('/cache', methods=['GET'])
+def get_cache():
+    """
+    Get all cached product data for frontend sidebar
+    
+    Returns:
+    {
+        "success": true,
+        "cache": {
+            "hash1": { product data },
+            "hash2": { product data }
+        },
+        "count": 2
+    }
+    """
+    try:
+        cache = load_cache()
+        
+        # Sort by timestamp if available
+        sorted_cache = {}
+        cache_items = []
+        
+        for key, value in cache.items():
+            timestamp = value.get('timestamp', '')
+            cache_items.append((timestamp, key, value))
+        
+        # Sort by timestamp descending (newest first)
+        cache_items.sort(reverse=True, key=lambda x: x[0])
+        
+        # Rebuild cache in sorted order
+        for _, key, value in cache_items:
+            sorted_cache[key] = value
+        
+        return jsonify({
+            "success": True,
+            "cache": sorted_cache,
+            "count": len(sorted_cache)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to load cache"
+        }), 500
+
 @app.route('/generate', methods=['POST'])
 def generate():
     """

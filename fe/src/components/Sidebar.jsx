@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Plus,
   Search,
@@ -15,54 +15,108 @@ export function Sidebar({ onFurnitureClick }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [furnitureItems, setFurnitureItems] = useState([])
-
-  const handleAddFurniture = (scrapedData) => {
-    // Check if URL already exists
-    const existingItem = furnitureItems.find(item => item.url === scrapedData.url)
-    if (existingItem) {
-      // If item already exists, don't add duplicate
-      console.log('Item already exists:', scrapedData.url)
-      return
-    }
-
-    // Handle the nested products structure from backend
-    let productData = scrapedData
-
-    // If the response has a products array, use the first product
-    if (scrapedData.products && scrapedData.products.length > 0) {
-      productData = {
-        ...scrapedData.products[0],
-        url: scrapedData.url,
-        collage_path: scrapedData.collage_path
+  
+  // Load cached items on mount
+  useEffect(() => {
+    const loadCachedItems = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/cache')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.cache) {
+            // Convert cache object to array of furniture items
+            const items = []
+            for (const [hash, cacheItem] of Object.entries(data.cache)) {
+              if (cacheItem.products && cacheItem.products.length > 0) {
+                // Process each product from the cache
+                cacheItem.products.forEach((product, index) => {
+                  const previewImage = product.images && product.images.length > 0
+                    ? product.images[0]
+                    : null
+                  
+                  items.push({
+                    id: product.id || `${hash}_${index}`,
+                    url: cacheItem.url,
+                    title: product.title || 'Furniture Item',
+                    name: product.title || 'Furniture Item',
+                    price: product.price,
+                    description: product.description,
+                    dimensions: product.dimensions,
+                    material: product.material,
+                    color: product.color,
+                    sku: product.sku,
+                    availability: product.availability,
+                    features: product.features,
+                    previewImage,
+                    images: product.images || [],
+                    collage_path: cacheItem.collage_path,
+                    source: new URL(cacheItem.url).hostname.replace('www.', ''),
+                    timestamp: cacheItem.timestamp
+                  })
+                })
+              }
+            }
+            
+            // Sort by timestamp (newest first) and set items
+            items.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+            setFurnitureItems(items)
+            console.log(`Loaded ${items.length} cached furniture items`)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load cached items:', error)
       }
     }
+    
+    loadCachedItems()
+  }, [])
 
-    // Extract the first image from the scraped data
-    const previewImage = productData.images && productData.images.length > 0
-      ? productData.images[0]
-      : null
-
-    const newItem = {
-      id: productData.id || Date.now(),  // Use product ID from backend if available
-      url: productData.url || scrapedData.url,
-      title: productData.title || productData.name || 'Furniture Item',
-      name: productData.title || productData.name || 'Furniture Item',
-      price: productData.price,
-      description: productData.description,
-      dimensions: productData.dimensions,
-      material: productData.material,
-      color: productData.color,
-      sku: productData.sku,
-      availability: productData.availability,
-      features: productData.features,
-      previewImage,
-      images: productData.images || [],
-      collage_path: productData.collage_path,
-      source: new URL(productData.url || scrapedData.url).hostname.replace('www.', '')
+  const handleAddFurniture = (scrapedData) => {
+    // Handle the nested products structure from backend
+    if (scrapedData.products && scrapedData.products.length > 0) {
+      // Process each product from the scraped data
+      const newItems = []
+      scrapedData.products.forEach((product) => {
+        // Check if this product ID already exists
+        const existingItem = furnitureItems.find(item => item.id === product.id)
+        if (existingItem) {
+          console.log('Product already exists with ID:', product.id)
+          return
+        }
+        
+        // Extract the first image from the product
+        const previewImage = product.images && product.images.length > 0
+          ? product.images[0]
+          : null
+        
+        const newItem = {
+          id: product.id || Date.now(),  // Use product ID from backend
+          url: scrapedData.url,
+          title: product.title || 'Furniture Item',
+          name: product.title || 'Furniture Item',
+          price: product.price,
+          description: product.description,
+          dimensions: product.dimensions,
+          material: product.material,
+          color: product.color,
+          sku: product.sku,
+          availability: product.availability,
+          features: product.features,
+          previewImage,
+          images: product.images || [],
+          collage_path: scrapedData.collage_path,
+          source: new URL(scrapedData.url).hostname.replace('www.', ''),
+          timestamp: scrapedData.timestamp
+        }
+        
+        newItems.push(newItem)
+      })
+      
+      if (newItems.length > 0) {
+        // Add new items at the beginning (newest first)
+        setFurnitureItems([...newItems, ...furnitureItems])
+      }
     }
-
-    // Add new item at the beginning (newest first)
-    setFurnitureItems([newItem, ...furnitureItems])
   }
 
   const filteredItems = furnitureItems.filter(item =>
