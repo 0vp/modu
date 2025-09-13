@@ -9,15 +9,12 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { AddFurnitureModal } from './AddFurnitureModal'
-import { FurnitureDetailsModal } from './FurnitureDetailsModal'
 
-export function Sidebar() {
+export function Sidebar({ onFurnitureClick }) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [furnitureItems, setFurnitureItems] = useState([])
-  const [selectedFurniture, setSelectedFurniture] = useState(null)
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
 
   const handleAddFurniture = (scrapedData) => {
     // Check if URL already exists
@@ -128,11 +125,13 @@ export function Sidebar() {
                   {filteredItems.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => {
-                        setSelectedFurniture(item)
-                        setIsDetailsModalOpen(true)
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('furniture', JSON.stringify(item))
+                        e.dataTransfer.effectAllowed = 'copy'
                       }}
-                      className="w-full flex gap-3 p-2 hover:bg-accent rounded-lg transition-colors group text-left"
+                      onClick={() => onFurnitureClick(item)}
+                      className="w-full flex gap-3 p-2 hover:bg-accent rounded-lg transition-colors group text-left cursor-move"
                     >
                       {item.previewImage ? (
                         <img
@@ -170,11 +169,13 @@ export function Sidebar() {
               {furnitureItems.slice(0, 8).map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => {
-                    setSelectedFurniture(item)
-                    setIsDetailsModalOpen(true)
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('furniture', JSON.stringify(item))
+                    e.dataTransfer.effectAllowed = 'copy'
                   }}
-                  className="block w-full hover:bg-accent rounded-lg transition-colors p-1"
+                  onClick={() => onFurnitureClick(item)}
+                  className="block w-full hover:bg-accent rounded-lg transition-colors p-1 cursor-move"
                   title={item.name}
                 >
                   {item.previewImage ? (
@@ -212,15 +213,6 @@ export function Sidebar() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onAdd={handleAddFurniture}
-      />
-
-      <FurnitureDetailsModal
-        isOpen={isDetailsModalOpen}
-        onClose={() => {
-          setIsDetailsModalOpen(false)
-          setSelectedFurniture(null)
-        }}
-        furniture={selectedFurniture}
       />
     </>
   )

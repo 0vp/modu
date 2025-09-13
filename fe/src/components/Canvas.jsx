@@ -1,15 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, Image as ImageIcon } from 'lucide-react'
+import { Upload, Image as ImageIcon, X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useDrawing } from '../contexts/DrawingContext'
 
-export function Canvas() {
+export function Canvas({ onFurnitureClick }) {
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedImage, setUploadedImage] = useState(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [paths, setPaths] = useState([]) // Stores normalized paths (0-1 range)
   const [currentPath, setCurrentPath] = useState([])
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
+  const [furniturePins, setFurniturePins] = useState([]) // Stores furniture pins
+  const [hoveredPin, setHoveredPin] = useState(null)
+  const [draggingPin, setDraggingPin] = useState(null)
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 })
+  const [isInteractingWithPin, setIsInteractingWithPin] = useState(false)
   const fileInputRef = useRef(null)
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
@@ -38,6 +43,38 @@ export function Canvas() {
     e.stopPropagation()
     setIsDragging(false)
 
+    // Check if it's a furniture item being dropped
+    const furnitureData = e.dataTransfer.getData('furniture')
+    if (furnitureData) {
+      const furniture = JSON.parse(furnitureData)
+
+      // Get drop position relative to the image
+      if (imageRef.current && containerRef.current) {
+        const imgRect = imageRef.current.getBoundingClientRect()
+
+        // Calculate position relative to the image
+        const x = e.clientX - imgRect.left
+        const y = e.clientY - imgRect.top
+
+        // Normalize coordinates (0-1 range)
+        const normalizedX = x / imgRect.width
+        const normalizedY = y / imgRect.height
+
+        // Only add pin if dropped on the image
+        if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
+          const newPin = {
+            ...furniture,
+            id: `pin-${Date.now()}`,
+            x: normalizedX,
+            y: normalizedY
+          }
+          setFurniturePins([...furniturePins, newPin])
+        }
+      }
+      return
+    }
+
+    // Handle regular file drops
     const files = e.dataTransfer.files
     if (files && files[0]) {
       handleFile(files[0])
@@ -124,7 +161,7 @@ export function Canvas() {
   }, [uploadedImage, paths, currentPath, isDrawing])
 
   const startDrawing = (e) => {
-    if (!isDrawingMode || !canvasRef.current) return
+    if (!isDrawingMode || !canvasRef.current || isInteractingWithPin) return
 
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
@@ -212,6 +249,69 @@ export function Canvas() {
     }
   }
 
+  // Handle pin dragging
+  const handlePinDragStart = (e, pin) => {
+    e.stopPropagation()
+    setIsInteractingWithPin(true)
+    setDraggingPin(pin.id)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('pinId', pin.id)
+
+    // Create a transparent drag image to hide the default ghost
+    const dragImage = new Image()
+    dragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs='
+    e.dataTransfer.setDragImage(dragImage, 0, 0)
+  }
+
+  const handlePinDragOver = (e) => {
+    if (draggingPin) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+
+      // Update drag position for visual feedback
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setDragPosition({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        })
+      }
+    }
+  }
+
+  const handlePinDrop = (e) => {
+    e.preventDefault()
+    const pinId = e.dataTransfer.getData('pinId')
+
+    if (pinId && imageRef.current) {
+      const imgRect = imageRef.current.getBoundingClientRect()
+      const x = e.clientX - imgRect.left
+      const y = e.clientY - imgRect.top
+
+      const normalizedX = x / imgRect.width
+      const normalizedY = y / imgRect.height
+
+      // Update pin position if dropped on image
+      if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
+        setFurniturePins(pins =>
+          pins.map(pin =>
+            pin.id === pinId
+              ? { ...pin, x: normalizedX, y: normalizedY }
+              : pin
+          )
+        )
+      }
+    }
+    setDraggingPin(null)
+    setDragPosition({ x: 0, y: 0 })
+    setIsInteractingWithPin(false)
+  }
+
+  // Delete pin
+  const deletePin = (pinId) => {
+    setFurniturePins(pins => pins.filter(pin => pin.id !== pinId))
+  }
+
   return (
     <div className="flex-1 bg-secondary/50 dark:bg-background overflow-hidden relative p-4">
       <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
@@ -220,8 +320,18 @@ export function Canvas() {
         ref={containerRef}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
+        onDragOver={(e) => {
+          handleDragOver(e)
+          handlePinDragOver(e)
+        }}
+        onDrop={(e) => {
+          // Check if it's a pin being moved
+          if (e.dataTransfer.getData('pinId')) {
+            handlePinDrop(e)
+          } else {
+            handleDrop(e)
+          }
+        }}
         onClick={handleClick}
         onMouseDown={startDrawing}
         onMouseMove={draw}
@@ -324,6 +434,94 @@ export function Canvas() {
             }}
           />
         )}
+
+        {/* Dragging indicator */}
+        {draggingPin && dragPosition.x > 0 && (
+          <div
+            className="absolute pointer-events-none z-50"
+            style={{
+              left: dragPosition.x - 12,
+              top: dragPosition.y - 12
+            }}
+          >
+            <div className="relative w-6 h-6">
+              <div className="absolute inset-0 bg-primary rounded-full animate-pulse opacity-60"></div>
+              <div className="absolute inset-1 bg-primary rounded-full"></div>
+            </div>
+          </div>
+        )}
+
+        {/* Furniture pins */}
+        {uploadedImage && imageRef.current && furniturePins.map((pin) => {
+          const imgRect = imageRef.current?.getBoundingClientRect()
+          if (!imgRect) return null
+
+          return (
+            <div
+              key={pin.id}
+              className={`absolute group transition-opacity ${draggingPin === pin.id ? 'opacity-50' : 'opacity-100'}`}
+              style={{
+                left: imgRect.left - containerRef.current?.getBoundingClientRect().left + pin.x * imgRect.width - 12,
+                top: imgRect.top - containerRef.current?.getBoundingClientRect().top + pin.y * imgRect.height - 12,
+                zIndex: 20
+              }}
+              draggable
+              onDragStart={(e) => handlePinDragStart(e, pin)}
+              onDragEnd={() => {
+                setDraggingPin(null)
+                setDragPosition({ x: 0, y: 0 })
+                setIsInteractingWithPin(false)
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                setIsInteractingWithPin(true)
+              }}
+              onMouseUp={(e) => {
+                e.stopPropagation()
+                setIsInteractingWithPin(false)
+              }}
+              onMouseEnter={() => setHoveredPin(pin.id)}
+              onMouseLeave={() => {
+                setHoveredPin(null)
+                setIsInteractingWithPin(false)
+              }}
+            >
+              {/* Pin dot with ring */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onFurnitureClick(pin)
+                }}
+                className="relative w-6 h-6 cursor-move"
+              >
+                <div className="absolute inset-0 bg-primary rounded-full animate-pulse opacity-30"></div>
+                <div className="absolute inset-1 bg-primary rounded-full"></div>
+              </button>
+
+              {/* Delete button - using opacity transition instead of conditional rendering */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  deletePin(pin.id)
+                }}
+                className={`absolute -top-2 -right-2 w-5 h-5 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-full flex items-center justify-center shadow-md z-40 transition-opacity ${
+                  hoveredPin === pin.id ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                title="Delete pin"
+              >
+                <X className="w-3 h-3" />
+              </button>
+
+              {/* Tooltip - also using opacity transition */}
+              <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 bg-card border border-border rounded-lg px-2 py-1 text-xs text-foreground shadow-lg whitespace-nowrap z-30 transition-opacity ${
+                hoveredPin === pin.id ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}>
+                {pin.name || pin.title}
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-card border-b border-r border-border rotate-45"></div>
+              </div>
+            </div>
+          )
+        })}
 
         {uploadedImage && (
           <div className="absolute top-4 right-4 flex gap-2">
