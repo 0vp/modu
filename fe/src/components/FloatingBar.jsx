@@ -2,12 +2,9 @@ import { useState } from 'react'
 import {
   Undo,
   Redo,
-  Copy,
+  Paintbrush,
   ChevronDown,
-  Send,
-  MessageSquare,
-  Palette,
-  Layers
+  Send
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
@@ -45,37 +42,14 @@ export function FloatingBar() {
         >
           <Redo className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
         </button>
-
-        <button
-          className="p-2 hover:bg-accent rounded-lg transition-colors group"
-          title="Copy"
-        >
-          <Copy className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
-        </button>
       </div>
 
-      <div className="flex items-center gap-1">
-        <button
-          className="p-2 hover:bg-accent rounded-lg transition-colors group"
-          title="Comments"
-        >
-          <MessageSquare className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
-        </button>
-
-        <button
-          className="p-2 hover:bg-accent rounded-lg transition-colors group"
-          title="Colors"
-        >
-          <Palette className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
-        </button>
-
-        <button
-          className="p-2 hover:bg-accent rounded-lg transition-colors group"
-          title="Layers"
-        >
-          <Layers className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
-        </button>
-      </div>
+      <button
+        className="p-2 hover:bg-accent rounded-lg transition-colors group"
+        title="Paintbrush"
+      >
+        <Paintbrush className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
+      </button>
 
       <div className="relative pl-2 border-l border-border">
         <button
