@@ -13,6 +13,8 @@ from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import math
 import threading
+import time
+from fal import generate_image, generate_from_product
 
 load_dotenv()
 
@@ -383,6 +385,136 @@ def analyze_products(scraped_data):
         return []
     
     return []
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    """
+    Generate images using FAL AI with bytedance/seedream/v4/edit model
+    
+    Expected JSON body:
+    {
+        "prompt": "image generation/edit prompt",
+        "images": ["/path/to/local/image.jpg", "https://url/to/image.jpg"],  # REQUIRED - local paths or URLs
+        "num_images": 1,  # optional, default 1
+        "guidance_scale": 3.5,  # optional, default 3.5
+        "num_inference_steps": 28  # optional, default 28
+    }
+    
+    Or for product-based generation:
+    {
+        "product_url": "https://furniture-site.com/product",
+        "style": "modern product photography"  # optional
+    }
+    
+    Note: The 'images' field is required and can contain:
+    - Local file paths (e.g., "/Users/q/Desktop/image.jpg" or "./product_data/collage.jpg")
+    - URLs (e.g., "https://example.com/image.jpg")
+    - Mix of both
+    """
+    try:
+        # Start timing
+        start_time = time.time()
+        
+        data = request.json
+        
+        # Log the request
+        print(f"[{datetime.now().isoformat()}] Generate request received")
+        print(f"  Prompt: {data.get('prompt', '')}")
+        print(f"  Images: {len(data.get('images', []))} provided")
+        
+        # Check if this is a product-based generation
+        if 'product_url' in data:
+            # Fetch product data from cache or scrape
+            url = data['product_url']
+            cache = load_cache()
+            url_hash = get_url_hash(url)
+            
+            if url_hash in cache:
+                product_data = cache[url_hash]
+            else:
+                # Need to scrape first
+                return jsonify({
+                    "success": False,
+                    "error": "Product not found in cache. Please scrape the URL first using /scrape endpoint"
+                }), 400
+            
+            # Generate from product
+            style = data.get('style', 'modern product photography')
+            
+            # Time the FAL API call
+            fal_start = time.time()
+            result = generate_from_product(product_data, style)
+            fal_duration = time.time() - fal_start
+            
+        else:
+            # Direct prompt-based generation
+            prompt = data.get('prompt')
+            if not prompt:
+                return jsonify({
+                    "success": False,
+                    "error": "Prompt is required"
+                }), 400
+            
+            # Get image paths (support both 'images' and 'image_urls' for compatibility)
+            images = data.get('images') or data.get('image_urls')
+            if not images:
+                return jsonify({
+                    "success": False,
+                    "error": "Images list is required for the edit model"
+                }), 400
+            
+            # Always use the bytedance/seedream edit model
+            kwargs = {
+                'model': 'fal-ai/nano-banana/edit', # fal-ai/nano-banana/edit, fal-ai/bytedance/seedream/v4/edit
+                'num_images': data.get('num_images', 1),
+                'output_format': data.get('output_format', 'jpeg')
+            }
+            
+            # Time the FAL API call
+            fal_start = time.time()
+            result = generate_image(prompt, images, **kwargs)
+            fal_duration = time.time() - fal_start
+        
+        # Calculate total time
+        total_duration = time.time() - start_time
+        
+        # Add timing information to result
+        if result.get('success'):
+            result['timing'] = {
+                'fal_api_duration': round(fal_duration, 2),
+                'total_duration': round(total_duration, 2),
+                'overhead': round(total_duration - fal_duration, 2),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Log success
+            print(f"[{datetime.now().isoformat()}] Generation successful")
+            print(f"  FAL API: {result['timing']['fal_api_duration']}s")
+            print(f"  Total: {result['timing']['total_duration']}s")
+            if result.get('images'):
+                print(f"  Generated {len(result['images'])} image(s)")
+            
+            return jsonify(result)
+        else:
+            result['timing'] = {
+                'fal_api_duration': round(fal_duration, 2) if 'fal_duration' in locals() else None,
+                'total_duration': round(total_duration, 2),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Log failure
+            print(f"[{datetime.now().isoformat()}] Generation failed")
+            print(f"  Error: {result.get('error', 'Unknown error')}")
+            print(f"  Duration: {result['timing']['total_duration']}s")
+            
+            return jsonify(result), 500
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to process generation request"
+        }), 500
 
 
 if __name__ == '__main__':
