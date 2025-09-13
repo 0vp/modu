@@ -43,7 +43,7 @@ export function Sidebar({ onFurnitureClick }) {
       : null
 
     const newItem = {
-      id: Date.now(),
+      id: productData.id || Date.now(),  // Use product ID from backend if available
       url: productData.url || scrapedData.url,
       title: productData.title || productData.name || 'Furniture Item',
       name: productData.title || productData.name || 'Furniture Item',

@@ -134,7 +134,7 @@ export function AddFurnitureModal({ isOpen, onClose, onAdd }) {
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Scraping...
+                  Fetching...
                 </>
               ) : (
                 'Add'

@@ -22,22 +22,146 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
 
   // Handle Space key press
   useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (e.key === ' ' && hasChanges) {
+    const handleKeyPress = async (e) => {
+      if (e.key === ' ' && hasChanges && uploadedImage && imageRef.current) {
         e.preventDefault() // Prevent page scroll
-        console.log('Changes detected - Space pressed', {
-          drawingPaths: paths.length,
-          furniturePins: furniturePins.length,
-          pins: furniturePins
-        })
-        // Reset changes after processing
-        setHasChanges(false)
+        console.log('Saving canvas images...')
+
+        try {
+          // Create a temporary canvas for the annotated image
+          const tempCanvas = document.createElement('canvas')
+          const tempCtx = tempCanvas.getContext('2d')
+
+          // Set canvas size to match the actual image dimensions
+          tempCanvas.width = imageRef.current.naturalWidth
+          tempCanvas.height = imageRef.current.naturalHeight
+
+          // Draw the original image
+          tempCtx.drawImage(imageRef.current, 0, 0)
+
+          // Draw the paths (drawings) on top
+          if (paths.length > 0) {
+            tempCtx.globalAlpha = 1  // Full opacity for better visibility
+            tempCtx.strokeStyle = '#000000'  // Black color
+            tempCtx.lineWidth = Math.max(8, Math.min(16, tempCanvas.width / 50))  // Slightly thinner for cleaner look
+            tempCtx.lineCap = 'round'
+            tempCtx.lineJoin = 'round'
+
+            paths.forEach(path => {
+              if (path.length > 0) {
+                tempCtx.beginPath()
+                path.forEach((point, index) => {
+                  const x = point.x * tempCanvas.width
+                  const y = point.y * tempCanvas.height
+                  if (index === 0) {
+                    tempCtx.moveTo(x, y)
+                  } else {
+                    tempCtx.lineTo(x, y)
+                  }
+                })
+                tempCtx.stroke()
+              }
+            })
+          }
+
+          // Add furniture labels vertically (instead of dots)
+          if (furniturePins.length > 0) {
+            tempCtx.globalAlpha = 1
+            // Bigger, bold monospace font for better visibility
+            const fontSize = Math.max(20, Math.min(30, tempCanvas.width / 60))  // Larger size
+            tempCtx.font = `bold ${fontSize}px monospace`  // Bold for better visibility
+            tempCtx.textAlign = 'center'
+            tempCtx.textBaseline = 'middle'
+
+            furniturePins.forEach(pin => {
+              const x = pin.x * tempCanvas.width
+              const y = pin.y * tempCanvas.height
+              // Use the short product ID instead of long title
+              // Check if ID exists and is not a timestamp (which would be a number)
+              const label = (pin.id && typeof pin.id === 'string' && pin.id.length === 8) ? pin.id : 'UNKNOWN'
+
+              // Save the current context state
+              tempCtx.save()
+
+              // Translate to the pin position and rotate 90 degrees for vertical text
+              tempCtx.translate(x, y)
+              tempCtx.rotate(-Math.PI / 2)  // Rotate -90 degrees (text reads from bottom to top)
+
+              // Draw white background with more padding for better visibility
+              const textMetrics = tempCtx.measureText(label)
+              const padding = 8  // More padding for better visibility
+
+              // Background rectangle (now rotated) with drop shadow effect
+              // Draw shadow first
+              tempCtx.fillStyle = 'rgba(0, 0, 0, 0.3)'  // Semi-transparent black shadow
+              tempCtx.fillRect(
+                -textMetrics.width / 2 - padding + 3,
+                -fontSize/2 - padding + 3,
+                textMetrics.width + padding * 2,
+                fontSize + padding * 2
+              )
+
+              // Then draw white background
+              tempCtx.fillStyle = 'rgba(255, 255, 255, 1)'  // Fully opaque white
+              tempCtx.fillRect(
+                -textMetrics.width / 2 - padding,
+                -fontSize/2 - padding,
+                textMetrics.width + padding * 2,
+                fontSize + padding * 2
+              )
+
+              // Draw thicker black border for better visibility
+              tempCtx.strokeStyle = '#000000'  // Black border
+              tempCtx.lineWidth = 2  // Thicker border for clarity
+              tempCtx.strokeRect(
+                -textMetrics.width / 2 - padding,
+                -fontSize/2 - padding,
+                textMetrics.width + padding * 2,
+                fontSize + padding * 2
+              )
+
+              // Draw text in black for maximum legibility
+              tempCtx.fillStyle = '#000000'  // Black text
+              tempCtx.fillText(label, 0, 0)  // Draw at origin since we've translated
+
+              // Restore the context state
+              tempCtx.restore()
+            })
+          }
+
+          // Convert canvases to base64
+          const originalImage = uploadedImage  // Already base64
+          const annotatedImage = tempCanvas.toDataURL('image/png')
+
+          // Send to backend
+          const response = await fetch('http://localhost:5000/save_canvas', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              original_image: originalImage,
+              annotated_image: annotatedImage
+            })
+          })
+
+          const result = await response.json()
+
+          if (result.success) {
+            console.log('Images saved successfully:', result)
+            setHasChanges(false)
+          } else {
+            console.error('Failed to save images:', result.error)
+          }
+        } catch (error) {
+          console.error('Error saving canvas images:', error)
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [hasChanges, paths, furniturePins, setHasChanges])
+  }, [hasChanges, paths, furniturePins, uploadedImage, setHasChanges])
 
   const handleDragEnter = (e) => {
     e.preventDefault()
@@ -82,7 +206,8 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
         if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
           const newPin = {
             ...furniture,
-            id: `pin-${Date.now()}`,
+            pinId: `pin-${Date.now()}`,  // Keep a separate pinId for React keys
+            // Keep the original furniture.id (8-char hash from backend)
             x: normalizedX,
             y: normalizedY
           }
@@ -276,9 +401,10 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
   const handlePinDragStart = (e, pin) => {
     e.stopPropagation()
     setIsInteractingWithPin(true)
-    setDraggingPin(pin.id)
+    const pinIdentifier = pin.pinId || pin.id
+    setDraggingPin(pinIdentifier)
     e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('pinId', pin.id)
+    e.dataTransfer.setData('pinId', pinIdentifier)
 
     // Create a transparent drag image to hide the default ghost
     const dragImage = new Image()
@@ -317,11 +443,12 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
       // Update pin position if dropped on image
       if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
         setFurniturePins(pins => {
-          const updatedPins = pins.map(pin =>
-            pin.id === pinId
+          const updatedPins = pins.map(pin => {
+            const pinIdentifier = pin.pinId || pin.id
+            return pinIdentifier === pinId
               ? { ...pin, x: normalizedX, y: normalizedY }
               : pin
-          )
+          })
           setHasChanges(true) // Mark as changed when pin is moved
           return updatedPins
         })
@@ -334,7 +461,10 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
 
   // Delete pin
   const deletePin = (pinId) => {
-    setFurniturePins(pins => pins.filter(pin => pin.id !== pinId))
+    setFurniturePins(pins => pins.filter(pin => {
+      const pinIdentifier = pin.pinId || pin.id
+      return pinIdentifier !== pinId
+    }))
     setHasChanges(true) // Mark as changed when pin is deleted
   }
 
@@ -487,8 +617,8 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
 
           return (
             <div
-              key={pin.id}
-              className={`absolute group transition-opacity ${draggingPin === pin.id ? 'opacity-50' : 'opacity-100'}`}
+              key={pin.pinId || pin.id}
+              className={`absolute group transition-opacity ${draggingPin === (pin.pinId || pin.id) ? 'opacity-50' : 'opacity-100'}`}
               style={{
                 left: imgRect.left - containerRef.current?.getBoundingClientRect().left + pin.x * imgRect.width - 14,
                 top: imgRect.top - containerRef.current?.getBoundingClientRect().top + pin.y * imgRect.height - 14,
@@ -509,7 +639,7 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
                 e.stopPropagation()
                 setIsInteractingWithPin(false)
               }}
-              onMouseEnter={() => setHoveredPin(pin.id)}
+              onMouseEnter={() => setHoveredPin(pin.pinId || pin.id)}
               onMouseLeave={() => {
                 setHoveredPin(null)
                 setIsInteractingWithPin(false)
@@ -534,10 +664,10 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  deletePin(pin.id)
+                  deletePin(pin.pinId || pin.id)
                 }}
                 className={`absolute -top-2 -right-2 w-5 h-5 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-full flex items-center justify-center shadow-md z-40 transition-opacity ${
-                  hoveredPin === pin.id ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  hoveredPin === (pin.pinId || pin.id) ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
                 title="Delete pin"
               >
@@ -546,7 +676,7 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
 
               {/* Tooltip - also using opacity transition */}
               <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 bg-card border border-border rounded-lg px-2 py-1 text-xs text-foreground shadow-lg whitespace-nowrap z-30 transition-opacity ${
-                hoveredPin === pin.id ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                hoveredPin === (pin.pinId || pin.id) ? 'opacity-100' : 'opacity-0 pointer-events-none'
               }`}>
                 {pin.name || pin.title}
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-card border-b border-r border-border rotate-45"></div>

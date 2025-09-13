@@ -15,6 +15,8 @@ import math
 import threading
 import time
 from fal import generate_image, generate_from_product
+import base64
+import uuid
 
 load_dotenv()
 
@@ -64,17 +66,20 @@ def create_product_collage_sync(products, url_hash):
         collage = Image.new('RGB', (1920, 1080), color='white')
         draw = ImageDraw.Draw(collage)
         
-        # Add title at the top
+        # Add product ID at the top (instead of long title)
+        product_id = product.get('id', 'Unknown')
         title = product.get('title', 'Product')
+        # Show ID prominently with title as subtitle
+        display_text = f"ID: {product_id} - {title[:60]}" if len(title) > 60 else f"ID: {product_id} - {title}"
         try:
             # Try to use a larger font, fallback to default if not available
             font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 48)
         except:
             font = ImageFont.load_default()
-        
-        # Draw title with black background
+
+        # Draw ID and title with black background
         draw.rectangle([0, 0, 1920, 100], fill='black')
-        draw.text((50, 25), title[:80], fill='white', font=font)
+        draw.text((50, 25), display_text, fill='white', font=font)
         
         # Calculate grid layout
         num_images = len(image_urls)
@@ -157,7 +162,7 @@ def scrape():
         return jsonify({
             "error": "URL parameter is required"
         }), 400
-    
+
     # Check cache first
     cache = load_cache()
     url_hash = get_url_hash(url)
@@ -242,7 +247,7 @@ def scrape():
         
         # Always analyze with Cerebras AI
         try:
-            products = analyze_products(scraped_data)
+            products = analyze_products(scraped_data, url)
             
             # Get URL hash
             url_hash = get_url_hash(url)
@@ -291,7 +296,7 @@ def scrape():
             "url": url
         }), 500
 
-def analyze_products(scraped_data):
+def analyze_products(scraped_data, url):
     """
     Analyzes scraped content and images to extract furniture product information
     """
@@ -369,22 +374,94 @@ def analyze_products(scraped_data):
             json_str = response[json_start:json_end]
             parsed = json.loads(json_str)
             products = parsed.get('products', [])
-            
-            # Clean up Unicode characters in all product fields using unicodedata
-            for product in products:
+
+            # Clean up Unicode characters and add unique IDs
+            for i, product in enumerate(products):
+                # Generate a short unique ID for each product
+                # Use first 8 chars of MD5 hash of URL + product title + index
+                product_unique = f"{url}_{product.get('title', '')}_{i}"
+                product_id = hashlib.md5(product_unique.encode()).hexdigest()[:8]
+                product['id'] = product_id  # e.g., "a3b7c9d1"
+
+                # Clean up Unicode characters in all product fields
                 for key, value in product.items():
-                    if isinstance(value, str):
+                    if isinstance(value, str) and key != 'id':  # Don't modify the ID
                         # Normalize Unicode to ASCII equivalent
                         value = unicodedata.normalize('NFKD', value)
                         # Replace any remaining non-ASCII characters
                         value = value.encode('ascii', 'ignore').decode('ascii')
                         product[key] = value
-            
+
             return products
     except json.JSONDecodeError:
         return []
     
     return []
+
+@app.route('/save_canvas', methods=['POST'])
+def save_canvas():
+    """
+    Save canvas images (original and annotated) to product_data folder
+
+    Expected JSON body:
+    {
+        "original_image": "data:image/...",  # Base64 encoded original image
+        "annotated_image": "data:image/...",  # Base64 encoded annotated image
+    }
+    """
+    try:
+        data = request.json
+
+        if not data.get('original_image') or not data.get('annotated_image'):
+            return jsonify({
+                "success": False,
+                "error": "Both original_image and annotated_image are required"
+            }), 400
+
+        # Generate unique timestamp-based filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        unique_id = str(uuid.uuid4())[:8]
+
+        # Decode and save original image
+        original_data = data['original_image'].split(',')[1]  # Remove data:image/png;base64, prefix
+        original_bytes = base64.b64decode(original_data)
+        original_filename = f"original_{timestamp}_{unique_id}.png"
+        original_path = os.path.join(DATA_FOLDER, original_filename)
+
+        with open(original_path, 'wb') as f:
+            f.write(original_bytes)
+
+        # Decode and save annotated image
+        annotated_data = data['annotated_image'].split(',')[1]
+        annotated_bytes = base64.b64decode(annotated_data)
+        annotated_filename = f"annotated_{timestamp}_{unique_id}.png"
+        annotated_path = os.path.join(DATA_FOLDER, annotated_filename)
+
+        with open(annotated_path, 'wb') as f:
+            f.write(annotated_bytes)
+
+        print(f"[{datetime.now().isoformat()}] Canvas images saved")
+        print(f"  Original: {original_filename}")
+        print(f"  Annotated: {annotated_filename}")
+
+        return jsonify({
+            "success": True,
+            "original_path": os.path.abspath(original_path),
+            "annotated_path": os.path.abspath(annotated_path),
+            "filenames": {
+                "original": original_filename,
+                "annotated": annotated_filename
+            },
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        print(f"[{datetime.now().isoformat()}] Error saving canvas: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to save canvas images"
+        }), 500
 
 @app.route('/generate', methods=['POST'])
 def generate():
