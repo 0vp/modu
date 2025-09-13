@@ -1,0 +1,30 @@
+{
+  "c984d06aafbecf6bc55569f964148ea3": {
+    "url": "https://example.com",
+    "status_code": 200,
+    "title": "Example Domain",
+    "products": [],
+    "timestamp": "2025-09-13T11:03:07.770570"
+  },
+  "e973adf84b7b968997e0bc361aee5d53": {
+    "url": "https://www.leons.ca/products/fog-3-piece-queen-bed-package-white-black",
+    "status_code": 200,
+    "title": "Fog 3-Piece Queen Bed Package - White, Black | Leon's\n",
+    "products": [
+      {
+        "title": "Fog 3-Piece Queen Bed Package - White, Black",
+        "description": "A stylish 3\u2011piece queen\u2011size bed set featuring a sleek white frame with black accents.",
+        "price": "Price not available",
+        "dimensions": "Not specified",
+        "images": [
+          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed_1.jpg?pad_color=fff&v=1606254740&width=1400",
+          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed.jpg?pad_color=fff&v=1606254740&width=1400",
+          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed_SW.jpg?pad_color=fff&v=1606254741&width=1400"
+        ],
+        "material": "Material not specified",
+        "color": "White, Black"
+      }
+    ],
+    "timestamp": "2025-09-13T11:03:36.526325"
+  }
+}

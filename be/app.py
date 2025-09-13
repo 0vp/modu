@@ -5,10 +5,33 @@ import os
 import json
 from dotenv import load_dotenv
 from cerebras.cloud.sdk import Cerebras
+import hashlib
+from datetime import datetime
 
 load_dotenv()
 
 app = Flask(__name__)
+
+CACHE_FILE = 'db.json'
+
+def load_cache():
+    """Load cache from db.json file"""
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_cache(cache):
+    """Save cache to db.json file"""
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(cache, f, indent=2)
+
+def get_url_hash(url):
+    """Generate a hash for the URL to use as cache key"""
+    return hashlib.md5(url.encode()).hexdigest()
 
 @app.route('/')
 def root():
@@ -24,6 +47,15 @@ def scrape():
         return jsonify({
             "error": "URL parameter is required"
         }), 400
+    
+    # Check cache first
+    cache = load_cache()
+    url_hash = get_url_hash(url)
+    
+    if url_hash in cache:
+        cached_data = cache[url_hash]
+        cached_data['from_cache'] = True
+        return jsonify(cached_data)
     
     headers = {
         'accept-encoding': 'gzip, deflate, zstd',
@@ -110,19 +142,30 @@ def scrape():
         # Always analyze with Cerebras AI
         try:
             products = analyze_products(scraped_data)
-            return jsonify({
+            result = {
                 "url": url,
                 "status_code": response.status_code,
                 "title": title,
-                "products": products
-            })
+                "products": products,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Save to cache
+            cache = load_cache()
+            url_hash = get_url_hash(url)
+            cache[url_hash] = result
+            save_cache(cache)
+            
+            result['from_cache'] = False
+            return jsonify(result)
         except Exception as e:
             return jsonify({
                 "url": url,
                 "status_code": response.status_code,
                 "title": title,
                 "error": str(e),
-                "products": []
+                "products": [],
+                "from_cache": False
             })
         
     except requests.exceptions.RequestException as e:
