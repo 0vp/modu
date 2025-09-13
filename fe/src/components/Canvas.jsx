@@ -42,7 +42,7 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
           // Draw the paths (drawings) on top
           if (paths.length > 0) {
             tempCtx.globalAlpha = 1  // Full opacity for better visibility
-            tempCtx.strokeStyle = '#000000'  // Black color
+            tempCtx.strokeStyle = '#FD4499'  // Pink color matching the UI theme
             tempCtx.lineWidth = Math.max(8, Math.min(16, tempCanvas.width / 50))  // Slightly thinner for cleaner look
             tempCtx.lineCap = 'round'
             tempCtx.lineJoin = 'round'
@@ -73,59 +73,66 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
             tempCtx.textAlign = 'center'
             tempCtx.textBaseline = 'middle'
 
+            // Helper function to get contrast color
+            const getContrastColor = (hexColor) => {
+              const r = parseInt(hexColor.substr(0, 2), 16)
+              const g = parseInt(hexColor.substr(2, 2), 16)
+              const b = parseInt(hexColor.substr(4, 2), 16)
+              const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+              return luminance > 0.5 ? '#000000' : '#FFFFFF'
+            }
+
             furniturePins.forEach(pin => {
               const x = pin.x * tempCanvas.width
               const y = pin.y * tempCanvas.height
-              // Use the short product ID instead of long title
-              // Check if ID exists and is not a timestamp (which would be a number)
-              const label = (pin.id && typeof pin.id === 'string' && pin.id.length === 8) ? pin.id : 'UNKNOWN'
+              // Use the 6-char color ID
+              // Check if ID exists and is a valid 6-char hex color
+              const isValidColorId = pin.id && typeof pin.id === 'string' && pin.id.length === 6 && /^[0-9a-fA-F]{6}$/.test(pin.id)
+              const colorId = isValidColorId ? pin.id : 'cccccc'  // Default to light gray
+              const label = `#${colorId.toUpperCase()}`
 
-              // Save the current context state
-              tempCtx.save()
-
-              // Translate to the pin position and rotate 90 degrees for vertical text
-              tempCtx.translate(x, y)
-              tempCtx.rotate(-Math.PI / 2)  // Rotate -90 degrees (text reads from bottom to top)
-
-              // Draw white background with more padding for better visibility
+              // Draw colored background with padding
               const textMetrics = tempCtx.measureText(label)
-              const padding = 8  // More padding for better visibility
+              const padding = 8  // Padding for better visibility
+              
+              // Position label to the right of the pin
+              const labelX = x + 20  // Offset to the right of pin
+              const labelY = y  // Same vertical position as pin
 
-              // Background rectangle (now rotated) with drop shadow effect
+              // Background rectangle with drop shadow effect
               // Draw shadow first
               tempCtx.fillStyle = 'rgba(0, 0, 0, 0.3)'  // Semi-transparent black shadow
               tempCtx.fillRect(
-                -textMetrics.width / 2 - padding + 3,
-                -fontSize/2 - padding + 3,
+                labelX - padding + 3,
+                labelY - fontSize/2 - padding + 3,
                 textMetrics.width + padding * 2,
                 fontSize + padding * 2
               )
 
-              // Then draw white background
-              tempCtx.fillStyle = 'rgba(255, 255, 255, 1)'  // Fully opaque white
+              // Then draw colored background
+              tempCtx.fillStyle = `#${colorId}`  // Use product color
               tempCtx.fillRect(
-                -textMetrics.width / 2 - padding,
-                -fontSize/2 - padding,
+                labelX - padding,
+                labelY - fontSize/2 - padding,
                 textMetrics.width + padding * 2,
                 fontSize + padding * 2
               )
 
-              // Draw thicker black border for better visibility
-              tempCtx.strokeStyle = '#000000'  // Black border
-              tempCtx.lineWidth = 2  // Thicker border for clarity
+              // Draw border for definition
+              tempCtx.strokeStyle = 'rgba(0, 0, 0, 0.3)'  // Subtle black border
+              tempCtx.lineWidth = 1  // Thin border
               tempCtx.strokeRect(
-                -textMetrics.width / 2 - padding,
-                -fontSize/2 - padding,
+                labelX - padding,
+                labelY - fontSize/2 - padding,
                 textMetrics.width + padding * 2,
                 fontSize + padding * 2
               )
 
-              // Draw text in black for maximum legibility
-              tempCtx.fillStyle = '#000000'  // Black text
-              tempCtx.fillText(label, 0, 0)  // Draw at origin since we've translated
-
-              // Restore the context state
-              tempCtx.restore()
+              // Draw text with contrasting color
+              const textColor = getContrastColor(colorId)
+              tempCtx.fillStyle = textColor
+              tempCtx.textAlign = 'left'  // Align text to left
+              tempCtx.fillText(label, labelX, labelY)
             })
           }
 
@@ -149,6 +156,95 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
 
           if (result.success) {
             console.log('Images saved successfully:', result)
+
+            // Generate the prompt for image replacement task
+            const uniquePins = {}  // Track unique products by ID
+            furniturePins.forEach(pin => {
+              const isValidColorId = pin.id && typeof pin.id === 'string' && pin.id.length === 6 && /^[0-9a-fA-F]{6}$/.test(pin.id)
+              const productId = isValidColorId ? pin.id : 'UNKNOWN'
+              if (productId !== 'UNKNOWN' && !uniquePins[productId]) {
+                uniquePins[productId] = pin
+              }
+            })
+
+            // Build the prompt structure
+            const prompt = {
+              task: "replace-colored-labels-in-base-image-with-matching-furniture",
+              image_indexing_note: "All images are 0-indexed. Image 0 is ALWAYS the base annotated image containing colored rectangular labels with hex codes. Images 1..N are ALWAYS product collage images with matching colored backgrounds.",
+              images: [
+                {
+                  index: 0,
+                  role: "base",
+                  description: "Annotated scene image with colored rectangular labels showing hex codes (e.g., #FF6B9D).",
+                  path: result.annotated_path
+                }
+              ],
+              matching_rule: "Each colored label in image 0 displays a hex color code (e.g., #FF6B9D). Match this color to the product collage image with the same colored background. Use the furniture from that collage to replace the labeled area in the base image.",
+              edits: [
+                {
+                  type: "replace_label_with_product",
+                  base_image_index: 0,
+                  instructions: {
+                    placement: "Replace each colored rectangular label in the base image with the matched furniture product, removing the colored label box completely.",
+                    composition: {
+                      background: "Preserve the original base scene.",
+                      occlusion: "Blend the product naturally into the environment; respect scene geometry.",
+                      scale_and_perspective: "Adjust the product to a realistic size and align with the perspective of the room/floor/walls.",
+                      lighting_and_color: "Match the base scene lighting and color temperature. Apply shadows/reflections for realism.",
+                      cleanup: "Erase all colored label artifacts; do not show the hex color codes or colored boxes in the final output."
+                    }
+                  },
+                  fallbacks: {
+                    unknown_color: "If a color label does not match any product collage background color, remove the label and restore the underlying base pixels.",
+                    multiple_labels_same_color: "Apply the same furniture product to each occurrence of the same color label.",
+                    partial_occlusion: "If the label area is smaller than the product footprint, expand placement to a plausible size consistent with the scene."
+                  }
+                }
+              ],
+              output: {
+                format: "single edited image",
+                remove_all_labels: true,
+                preserve_base_metadata: true
+              },
+              labels_in_base_image: []
+            }
+
+            // Add product images and details
+            let imageIndex = 1
+            for (const [productId, pin] of Object.entries(uniquePins)) {
+              // Add to images array
+              prompt.images.push({
+                index: imageIndex,
+                role: "product",
+                color_id: `#${productId.toUpperCase()}`,  // Color hex code
+                name: pin.name || pin.title || "Unknown Product",
+                path: pin.collage_path || null,
+                description: `Product collage with #${productId.toUpperCase()} colored background`,
+                details: {
+                  dimensions: pin.dimensions || null,
+                  color: pin.color || null,
+                  material: pin.material || null
+                }
+              })
+
+              // Add to labels list with actual pixel positions
+              prompt.labels_in_base_image.push({
+                color_id: `#${productId.toUpperCase()}`,
+                name: pin.name || pin.title || "Unknown Product",
+                position: {
+                  x: Math.round(pin.x * tempCanvas.width),
+                  y: Math.round(pin.y * tempCanvas.height)
+                }
+              })
+
+              imageIndex++
+            }
+
+            // Log the prompt to console
+            console.log('\n=== IMAGE REPLACEMENT PROMPT ===\n')
+            console.log(JSON.stringify(prompt, null, 2))
+            console.log('\n=== END OF PROMPT ===\n')
+
             setHasChanges(false)
           } else {
             console.error('Failed to save images:', result.error)

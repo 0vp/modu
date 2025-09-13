@@ -31,6 +31,70 @@ CACHE_FILE = os.path.join(DATA_FOLDER, 'db.json')
 if not os.path.exists(DATA_FOLDER):
     os.makedirs(DATA_FOLDER)
 
+def generate_bright_color_id(product_unique):
+    """
+    Generate a 6-character hex color code that's bright and vibrant
+    """
+    # Generate initial hash
+    base_hash = hashlib.md5(product_unique.encode()).hexdigest()
+    
+    # Extract RGB components from first 6 chars
+    r = int(base_hash[:2], 16)
+    g = int(base_hash[2:4], 16)
+    b = int(base_hash[4:6], 16)
+    
+    # Ensure brightness: at least one channel > 200, and total > 400
+    max_val = max(r, g, b)
+    if max_val < 200:
+        # Scale up the brightest channel
+        scale = 220 / max_val
+        r = min(255, int(r * scale))
+        g = min(255, int(g * scale))
+        b = min(255, int(b * scale))
+    
+    # Ensure vibrancy (avoid grays)
+    if abs(r - g) < 30 and abs(g - b) < 30 and abs(r - b) < 30:
+        # Boost the dominant color from hash
+        hash_val = int(base_hash[6:8], 16)
+        if hash_val % 3 == 0:
+            r = min(255, r + 80)
+            g = max(0, g - 20)
+            b = max(0, b - 20)
+        elif hash_val % 3 == 1:
+            g = min(255, g + 80)
+            r = max(0, r - 20)
+            b = max(0, b - 20)
+        else:
+            b = min(255, b + 80)
+            r = max(0, r - 20)
+            g = max(0, g - 20)
+    
+    # Ensure total brightness
+    total = r + g + b
+    if total < 400:
+        # Boost all channels proportionally
+        boost = (450 - total) / 3
+        r = min(255, int(r + boost))
+        g = min(255, int(g + boost))
+        b = min(255, int(b + boost))
+    
+    return f"{r:02x}{g:02x}{b:02x}"
+
+def get_contrast_color(hex_color):
+    """
+    Determine whether to use black or white text based on background color
+    """
+    # Convert hex to RGB
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    
+    # Calculate luminance using W3C formula
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    
+    # Return black for light backgrounds, white for dark
+    return 'black' if luminance > 0.5 else 'white'
+
 def load_cache():
     """Load cache from db.json file"""
     if os.path.exists(CACHE_FILE):
@@ -62,24 +126,30 @@ def create_product_collage_sync(products, url_hash):
         return None
     
     try:
-        # Create 1920x1080 canvas
-        collage = Image.new('RGB', (1920, 1080), color='white')
+        # Get product color ID
+        product_id = product.get('id', 'cccccc')  # Default to light gray if no ID
+        
+        # Create 1920x1080 canvas with product color as background
+        bg_color = f"#{product_id}"
+        collage = Image.new('RGB', (1920, 1080), color=bg_color)
         draw = ImageDraw.Draw(collage)
         
-        # Add product ID at the top (instead of long title)
-        product_id = product.get('id', 'Unknown')
+        # Determine text color based on background
+        text_color = get_contrast_color(product_id)
+        
+        # Add product ID and title at the top
         title = product.get('title', 'Product')
-        # Show ID prominently with title as subtitle
-        display_text = f"ID: {product_id} - {title[:60]}" if len(title) > 60 else f"ID: {product_id} - {title}"
+        # Show color ID prominently with title as subtitle
+        display_text = f"#{product_id.upper()} - {title[:50]}" if len(title) > 50 else f"#{product_id.upper()} - {title}"
         try:
             # Try to use a larger font, fallback to default if not available
             font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 48)
         except:
             font = ImageFont.load_default()
 
-        # Draw ID and title with black background
-        draw.rectangle([0, 0, 1920, 100], fill='black')
-        draw.text((50, 25), display_text, fill='white', font=font)
+        # Use the same color for title area - no overlay, just the product color
+        # Add text directly on the colored background
+        draw.text((50, 25), display_text, fill=text_color, font=font)
         
         # Calculate grid layout
         num_images = len(image_urls)
@@ -377,11 +447,10 @@ def analyze_products(scraped_data, url):
 
             # Clean up Unicode characters and add unique IDs
             for i, product in enumerate(products):
-                # Generate a short unique ID for each product
-                # Use first 8 chars of MD5 hash of URL + product title + index
+                # Generate a bright color ID for each product (6-char hex color)
                 product_unique = f"{url}_{product.get('title', '')}_{i}"
-                product_id = hashlib.md5(product_unique.encode()).hexdigest()[:8]
-                product['id'] = product_id  # e.g., "a3b7c9d1"
+                product_id = generate_bright_color_id(product_unique)
+                product['id'] = product_id  # e.g., "ff6b9d" (bright color)
 
                 # Clean up Unicode characters in all product fields
                 for key, value in product.items():
