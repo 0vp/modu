@@ -8,12 +8,21 @@ from cerebras.cloud.sdk import Cerebras
 import hashlib
 from datetime import datetime
 import unicodedata
+from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
+import math
+import threading
 
 load_dotenv()
 
 app = Flask(__name__)
 
-CACHE_FILE = 'db.json'
+DATA_FOLDER = 'product_data'
+CACHE_FILE = os.path.join(DATA_FOLDER, 'db.json')
+
+# Create data folder if it doesn't exist
+if not os.path.exists(DATA_FOLDER):
+    os.makedirs(DATA_FOLDER)
 
 def load_cache():
     """Load cache from db.json file"""
@@ -33,6 +42,101 @@ def save_cache(cache):
 def get_url_hash(url):
     """Generate a hash for the URL to use as cache key"""
     return hashlib.md5(url.encode()).hexdigest()
+
+def create_product_collage_sync(products, url_hash):
+    """Create a 1080p collage of product images with title (synchronous version)"""
+    if not products or not products[0].get('images'):
+        return None
+    
+    product = products[0]  # Use first product
+    image_urls = product.get('images', [])[:9]  # Max 9 images for 3x3 grid
+    
+    if not image_urls:
+        return None
+    
+    try:
+        # Create 1920x1080 canvas
+        collage = Image.new('RGB', (1920, 1080), color='white')
+        draw = ImageDraw.Draw(collage)
+        
+        # Add title at the top
+        title = product.get('title', 'Product')
+        try:
+            # Try to use a larger font, fallback to default if not available
+            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 48)
+        except:
+            font = ImageFont.load_default()
+        
+        # Draw title with black background
+        draw.rectangle([0, 0, 1920, 100], fill='black')
+        draw.text((50, 25), title[:80], fill='white', font=font)
+        
+        # Calculate grid layout
+        num_images = len(image_urls)
+        cols = math.ceil(math.sqrt(num_images))
+        rows = math.ceil(num_images / cols)
+        
+        # Available space (leaving space for title)
+        available_width = 1920
+        available_height = 980  # 1080 - 100 for title
+        
+        img_width = available_width // cols
+        img_height = available_height // rows
+        
+        # Download and place images
+        for idx, img_url in enumerate(image_urls):
+            try:
+                # Download image
+                response = requests.get(img_url, timeout=5)
+                img = Image.open(BytesIO(response.content))
+                
+                # Calculate position
+                row = idx // cols
+                col = idx % cols
+                x = col * img_width
+                y = 100 + (row * img_height)  # 100px offset for title
+                
+                # Resize image to fit cell while maintaining aspect ratio
+                img.thumbnail((img_width - 10, img_height - 10), Image.Resampling.LANCZOS)
+                
+                # Center image in cell
+                img_x = x + (img_width - img.width) // 2
+                img_y = y + (img_height - img.height) // 2
+                
+                # Paste image
+                collage.paste(img, (img_x, img_y))
+                
+                # Draw border
+                draw.rectangle([x, y, x + img_width, y + img_height], outline='gray', width=1)
+                
+            except Exception as e:
+                print(f"Error loading image {img_url}: {e}")
+                continue
+        
+        # Save collage
+        image_filename = f"{url_hash}.jpg"
+        image_path = os.path.join(DATA_FOLDER, image_filename)
+        collage.save(image_path, 'JPEG', quality=95)
+        
+        # Update cache with collage path
+        cache = load_cache()
+        if url_hash in cache:
+            cache[url_hash]['collage_path'] = os.path.abspath(image_path)
+            save_cache(cache)
+        
+        print(f"Collage created successfully: {image_path}")
+        return os.path.abspath(image_path)
+    
+    except Exception as e:
+        print(f"Error creating collage: {e}")
+        return None
+
+def create_product_collage_async(products, url_hash):
+    """Create product collage asynchronously in background thread"""
+    thread = threading.Thread(target=create_product_collage_sync, args=(products, url_hash))
+    thread.daemon = True  # Daemon thread will not prevent app from shutting down
+    thread.start()
+    print(f"Started async collage generation for {url_hash}")
 
 @app.route('/')
 def root():
@@ -56,6 +160,19 @@ def scrape():
     if url_hash in cache:
         cached_data = cache[url_hash]
         cached_data['from_cache'] = True
+        # Check if collage exists, create async if not
+        if 'collage_path' not in cached_data and cached_data.get('products'):
+            # Generate expected path
+            expected_path = os.path.abspath(os.path.join(DATA_FOLDER, f"{url_hash}.jpg"))
+            if os.path.exists(expected_path):
+                # Collage exists, add path
+                cached_data['collage_path'] = expected_path
+                cache[url_hash]['collage_path'] = expected_path
+                save_cache(cache)
+            else:
+                # Start async generation
+                create_product_collage_async(cached_data.get('products', []), url_hash)
+                cached_data['collage_generating'] = True
         return jsonify(cached_data)
     
     headers = {
@@ -121,6 +238,10 @@ def scrape():
         # Always analyze with Cerebras AI
         try:
             products = analyze_products(scraped_data)
+            
+            # Get URL hash
+            url_hash = get_url_hash(url)
+            
             result = {
                 "url": url,
                 "status_code": response.status_code,
@@ -129,11 +250,18 @@ def scrape():
                 "timestamp": datetime.now().isoformat()
             }
             
-            # Save to cache
+            # Generate expected collage path
+            expected_collage_path = os.path.abspath(os.path.join(DATA_FOLDER, f"{url_hash}.jpg"))
+            result['collage_path'] = expected_collage_path
+            result['collage_generating'] = True
+            
+            # Save to cache first
             cache = load_cache()
-            url_hash = get_url_hash(url)
-            cache[url_hash] = result
+            cache[url_hash] = result.copy()
             save_cache(cache)
+            
+            # Start async collage generation AFTER returning response
+            create_product_collage_async(products, url_hash)
             
             result['from_cache'] = False
             return jsonify(result)
