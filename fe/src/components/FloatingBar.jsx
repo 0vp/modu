@@ -7,10 +7,12 @@ import {
   Send
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { useDrawing } from '../contexts/DrawingContext'
 
 export function FloatingBar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
+  const { isDrawingMode, setIsDrawingMode } = useDrawing()
 
   const dropdownOptions = [
     { label: 'Export as PNG', value: 'png' },
@@ -45,10 +47,21 @@ export function FloatingBar() {
       </div>
 
       <button
-        className="p-2 hover:bg-accent rounded-lg transition-colors group"
-        title="Paintbrush"
+        onClick={() => setIsDrawingMode(!isDrawingMode)}
+        className={cn(
+          "p-2 rounded-lg transition-colors group",
+          isDrawingMode
+            ? "bg-primary text-primary-foreground"
+            : "hover:bg-accent"
+        )}
+        title={isDrawingMode ? "Exit drawing mode" : "Enter drawing mode"}
       >
-        <Paintbrush className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
+        <Paintbrush className={cn(
+          "w-5 h-5",
+          isDrawingMode
+            ? "text-primary-foreground"
+            : "text-muted-foreground group-hover:text-foreground"
+        )} />
       </button>
 
       <div className="relative pl-2 border-l border-border">

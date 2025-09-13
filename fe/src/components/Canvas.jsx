@@ -1,11 +1,20 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload, Image as ImageIcon } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { useDrawing } from '../contexts/DrawingContext'
 
 export function Canvas() {
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedImage, setUploadedImage] = useState(null)
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [paths, setPaths] = useState([]) // Stores normalized paths (0-1 range)
+  const [currentPath, setCurrentPath] = useState([])
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const fileInputRef = useRef(null)
+  const canvasRef = useRef(null)
+  const containerRef = useRef(null)
+  const imageRef = useRef(null)
+  const { isDrawingMode } = useDrawing()
 
   const handleDragEnter = (e) => {
     e.preventDefault()
@@ -53,7 +62,154 @@ export function Canvas() {
   }
 
   const handleClick = () => {
-    fileInputRef.current?.click()
+    if (!isDrawingMode) {
+      fileInputRef.current?.click()
+    }
+  }
+
+  // Handle canvas resizing and maintain aspect ratio
+  useEffect(() => {
+    const resizeCanvas = () => {
+      if (canvasRef.current && imageRef.current && uploadedImage) {
+        const container = containerRef.current.getBoundingClientRect()
+        const img = imageRef.current
+
+        // Calculate the displayed image dimensions (maintaining aspect ratio)
+        const imgAspect = img.naturalWidth / img.naturalHeight
+        const containerAspect = container.width / container.height
+
+        let displayWidth, displayHeight;
+        if (imgAspect > containerAspect) {
+          // Image is wider
+          displayWidth = container.width * 0.9 // 90% to account for padding
+          displayHeight = displayWidth / imgAspect
+        } else {
+          // Image is taller
+          displayHeight = container.height * 0.9
+          displayWidth = displayHeight * imgAspect
+        }
+
+        // Set canvas size to match displayed image
+        canvasRef.current.width = displayWidth
+        canvasRef.current.height = displayHeight
+        setCanvasSize({ width: displayWidth, height: displayHeight })
+
+        // Center the canvas
+        const leftOffset = (container.width - displayWidth) / 2
+        const topOffset = (container.height - displayHeight) / 2
+        canvasRef.current.style.left = `${leftOffset}px`
+        canvasRef.current.style.top = `${topOffset}px`
+
+        // Redraw all paths with new dimensions
+        redrawCanvas([...paths, ...(isDrawing ? [currentPath] : [])])
+      }
+    }
+
+    // Use ResizeObserver to detect container size changes (including sidebar toggle)
+    let resizeObserver;
+    if (containerRef.current && uploadedImage) {
+      resizeObserver = new ResizeObserver(resizeCanvas)
+      resizeObserver.observe(containerRef.current)
+    }
+
+    resizeCanvas()
+    window.addEventListener('resize', resizeCanvas)
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas)
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+      }
+    }
+  }, [uploadedImage, paths, currentPath, isDrawing])
+
+  const startDrawing = (e) => {
+    if (!isDrawingMode || !canvasRef.current) return
+
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+
+    // Normalize coordinates to 0-1 range
+    const normalizedX = x / canvas.width
+    const normalizedY = y / canvas.height
+
+    setCurrentPath([{ x: normalizedX, y: normalizedY }])
+    setIsDrawing(true)
+  }
+
+  const redrawCanvas = (allPaths) => {
+    if (!canvasRef.current) return
+
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+
+    // Clear the entire canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    // Redraw all paths
+    ctx.globalAlpha = 0.8
+    ctx.strokeStyle = '#8b5cf6'
+    // Scale line width based on canvas size
+    ctx.lineWidth = Math.max(12, Math.min(24, canvas.width / 40))
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    allPaths.forEach(path => {
+      if (path.length > 0) {
+        ctx.beginPath()
+        path.forEach((point, index) => {
+          // Convert normalized coordinates back to canvas coordinates
+          const x = point.x * canvas.width
+          const y = point.y * canvas.height
+
+          if (index === 0) {
+            ctx.moveTo(x, y)
+          } else {
+            ctx.lineTo(x, y)
+          }
+        })
+        ctx.stroke()
+      }
+    })
+  }
+
+  const draw = (e) => {
+    if (!isDrawing || !isDrawingMode || !canvasRef.current) return
+
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+
+    // Normalize coordinates to 0-1 range
+    const normalizedX = x / canvas.width
+    const normalizedY = y / canvas.height
+
+    const newPath = [...currentPath, { x: normalizedX, y: normalizedY }]
+    setCurrentPath(newPath)
+
+    // Redraw everything including the current path
+    redrawCanvas([...paths, newPath])
+  }
+
+  const stopDrawing = () => {
+    if (isDrawing && currentPath.length > 0) {
+      // Save the completed path
+      setPaths([...paths, currentPath])
+      setCurrentPath([])
+    }
+    setIsDrawing(false)
+  }
+
+  const clearDrawing = () => {
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d')
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      setPaths([])
+      setCurrentPath([])
+    }
   }
 
   return (
@@ -61,13 +217,21 @@ export function Canvas() {
       <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
 
       <div
+        ref={containerRef}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onClick={handleClick}
+        onMouseDown={startDrawing}
+        onMouseMove={draw}
+        onMouseUp={stopDrawing}
+        onMouseLeave={stopDrawing}
         className={cn(
-          "relative w-full h-full border-2 border-dashed rounded-lg transition-all cursor-pointer flex items-center justify-center",
+          "relative w-full h-full border-2 border-dashed rounded-lg transition-all flex items-center justify-center",
+          isDrawingMode
+            ? "cursor-crosshair"
+            : "cursor-pointer",
           isDragging
             ? "border-primary bg-primary/10"
             : "border-border bg-card dark:bg-card/50 hover:border-primary/50 hover:bg-secondary"
@@ -82,11 +246,40 @@ export function Canvas() {
         />
 
         {uploadedImage ? (
-          <div className="w-full h-full flex items-center justify-center p-8">
+          <div className="w-full h-full flex items-center justify-center p-8 relative">
             <img
+              ref={imageRef}
               src={uploadedImage}
               alt="Uploaded"
               className="max-w-full max-h-full object-contain rounded-lg shadow-md"
+              onLoad={() => {
+                // Trigger canvas resize when image loads
+                if (canvasRef.current && imageRef.current) {
+                  const container = containerRef.current.getBoundingClientRect()
+                  const img = imageRef.current
+
+                  const imgAspect = img.naturalWidth / img.naturalHeight
+                  const containerAspect = container.width / container.height
+
+                  let displayWidth, displayHeight;
+                  if (imgAspect > containerAspect) {
+                    displayWidth = container.width * 0.9
+                    displayHeight = displayWidth / imgAspect
+                  } else {
+                    displayHeight = container.height * 0.9
+                    displayWidth = displayHeight * imgAspect
+                  }
+
+                  canvasRef.current.width = displayWidth
+                  canvasRef.current.height = displayHeight
+                  setCanvasSize({ width: displayWidth, height: displayHeight })
+
+                  const leftOffset = (container.width - displayWidth) / 2
+                  const topOffset = (container.height - displayHeight) / 2
+                  canvasRef.current.style.left = `${leftOffset}px`
+                  canvasRef.current.style.top = `${topOffset}px`
+                }
+              }}
             />
           </div>
         ) : (
@@ -120,15 +313,42 @@ export function Canvas() {
         )}
 
         {uploadedImage && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setUploadedImage(null)
+          <canvas
+            ref={canvasRef}
+            className="absolute pointer-events-none"
+            style={{
+              pointerEvents: isDrawingMode ? 'auto' : 'none',
+              position: 'absolute',
+              width: 'auto',
+              height: 'auto'
             }}
-            className="absolute top-4 right-4 px-3 py-1.5 bg-card hover:bg-accent border border-border rounded-lg text-sm text-foreground shadow-sm transition-colors"
-          >
-            Clear Canvas
-          </button>
+          />
+        )}
+
+        {uploadedImage && (
+          <div className="absolute top-4 right-4 flex gap-2">
+            {isDrawingMode && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clearDrawing()
+                }}
+                className="px-3 py-1.5 bg-card hover:bg-accent border border-border rounded-lg text-sm text-foreground shadow-sm transition-colors"
+              >
+                Clear Drawing
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setUploadedImage(null)
+                clearDrawing()
+              }}
+              className="px-3 py-1.5 bg-card hover:bg-accent border border-border rounded-lg text-sm text-foreground shadow-sm transition-colors"
+            >
+              Clear Image
+            </button>
+          </div>
         )}
       </div>
     </div>
