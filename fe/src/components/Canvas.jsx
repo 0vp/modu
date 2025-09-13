@@ -3,9 +3,8 @@ import { Upload, Image as ImageIcon, X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useDrawing } from '../contexts/DrawingContext'
 
-export function Canvas({ onFurnitureClick }) {
+export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedImage, setUploadedImage }) {
   const [isDragging, setIsDragging] = useState(false)
-  const [uploadedImage, setUploadedImage] = useState(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [paths, setPaths] = useState([]) // Stores normalized paths (0-1 range)
   const [currentPath, setCurrentPath] = useState([])
@@ -20,6 +19,25 @@ export function Canvas({ onFurnitureClick }) {
   const containerRef = useRef(null)
   const imageRef = useRef(null)
   const { isDrawingMode } = useDrawing()
+
+  // Handle Space key press
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.key === ' ' && hasChanges) {
+        e.preventDefault() // Prevent page scroll
+        console.log('Changes detected - Space pressed', {
+          drawingPaths: paths.length,
+          furniturePins: furniturePins.length,
+          pins: furniturePins
+        })
+        // Reset changes after processing
+        setHasChanges(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [hasChanges, paths, furniturePins, setHasChanges])
 
   const handleDragEnter = (e) => {
     e.preventDefault()
@@ -69,6 +87,7 @@ export function Canvas({ onFurnitureClick }) {
             y: normalizedY
           }
           setFurniturePins([...furniturePins, newPin])
+          setHasChanges(true) // Mark as changed when pin is added
         }
       }
       return
@@ -236,6 +255,7 @@ export function Canvas({ onFurnitureClick }) {
       // Save the completed path
       setPaths([...paths, currentPath])
       setCurrentPath([])
+      setHasChanges(true) // Mark as changed when drawing is added
     }
     setIsDrawing(false)
   }
@@ -244,6 +264,9 @@ export function Canvas({ onFurnitureClick }) {
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d')
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      if (paths.length > 0) {
+        setHasChanges(true) // Mark as changed when drawings are cleared
+      }
       setPaths([])
       setCurrentPath([])
     }
@@ -293,13 +316,15 @@ export function Canvas({ onFurnitureClick }) {
 
       // Update pin position if dropped on image
       if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
-        setFurniturePins(pins =>
-          pins.map(pin =>
+        setFurniturePins(pins => {
+          const updatedPins = pins.map(pin =>
             pin.id === pinId
               ? { ...pin, x: normalizedX, y: normalizedY }
               : pin
           )
-        )
+          setHasChanges(true) // Mark as changed when pin is moved
+          return updatedPins
+        })
       }
     }
     setDraggingPin(null)
@@ -310,6 +335,7 @@ export function Canvas({ onFurnitureClick }) {
   // Delete pin
   const deletePin = (pinId) => {
     setFurniturePins(pins => pins.filter(pin => pin.id !== pinId))
+    setHasChanges(true) // Mark as changed when pin is deleted
   }
 
   return (

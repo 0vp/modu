@@ -10,6 +10,8 @@ import { DrawingProvider } from './contexts/DrawingContext'
 function App() {
   const [selectedFurniture, setSelectedFurniture] = useState(null)
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
+  const [hasCanvasChanges, setHasCanvasChanges] = useState(false)
+  const [uploadedImage, setUploadedImage] = useState(null)
 
   const handleFurnitureClick = (furniture) => {
     setSelectedFurniture(furniture)
@@ -20,11 +22,17 @@ function App() {
     <ThemeProvider>
       <DrawingProvider>
         <div className="h-screen flex flex-col bg-background overflow-hidden">
-          <Navbar />
+          <Navbar hasChanges={hasCanvasChanges} uploadedImage={uploadedImage} />
 
           <div className="flex-1 flex overflow-hidden">
             <Sidebar onFurnitureClick={handleFurnitureClick} />
-            <Canvas onFurnitureClick={handleFurnitureClick} />
+            <Canvas
+              onFurnitureClick={handleFurnitureClick}
+              hasChanges={hasCanvasChanges}
+              setHasChanges={setHasCanvasChanges}
+              uploadedImage={uploadedImage}
+              setUploadedImage={setUploadedImage}
+            />
           </div>
 
           <FloatingBar />
