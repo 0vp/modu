@@ -1,2 +1,3 @@
 be/.env
 /be/__pycache__
+/be/product_data
