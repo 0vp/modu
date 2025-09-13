@@ -4,9 +4,15 @@ const DrawingContext = createContext()
 
 export function DrawingProvider({ children }) {
   const [isDrawingMode, setIsDrawingMode] = useState(false)
+  const [isEraserMode, setIsEraserMode] = useState(false)
 
   return (
-    <DrawingContext.Provider value={{ isDrawingMode, setIsDrawingMode }}>
+    <DrawingContext.Provider value={{
+      isDrawingMode,
+      setIsDrawingMode,
+      isEraserMode,
+      setIsEraserMode
+    }}>
       {children}
     </DrawingContext.Provider>
   )

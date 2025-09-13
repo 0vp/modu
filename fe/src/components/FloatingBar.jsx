@@ -3,6 +3,7 @@ import {
   Undo,
   Redo,
   Paintbrush,
+  Eraser,
   ChevronDown,
   Send
 } from 'lucide-react'
@@ -12,7 +13,7 @@ import { useDrawing } from '../contexts/DrawingContext'
 export function FloatingBar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
-  const { isDrawingMode, setIsDrawingMode } = useDrawing()
+  const { isDrawingMode, setIsDrawingMode, isEraserMode, setIsEraserMode } = useDrawing()
 
   const dropdownOptions = [
     { label: 'Export as PNG', value: 'png' },
@@ -47,7 +48,10 @@ export function FloatingBar() {
       </div>
 
       <button
-        onClick={() => setIsDrawingMode(!isDrawingMode)}
+        onClick={() => {
+          setIsDrawingMode(!isDrawingMode)
+          if (isEraserMode) setIsEraserMode(false)  // Turn off eraser when enabling drawing
+        }}
         className={cn(
           "p-2 rounded-lg transition-colors group",
           isDrawingMode
@@ -59,6 +63,27 @@ export function FloatingBar() {
         <Paintbrush className={cn(
           "w-5 h-5",
           isDrawingMode
+            ? "text-primary-foreground"
+            : "text-muted-foreground group-hover:text-foreground"
+        )} />
+      </button>
+
+      <button
+        onClick={() => {
+          setIsEraserMode(!isEraserMode)
+          if (isDrawingMode) setIsDrawingMode(false)  // Turn off drawing when enabling eraser
+        }}
+        className={cn(
+          "p-2 rounded-lg transition-colors group",
+          isEraserMode
+            ? "bg-primary text-primary-foreground"
+            : "hover:bg-accent"
+        )}
+        title={isEraserMode ? "Exit eraser mode" : "Enter eraser mode"}
+      >
+        <Eraser className={cn(
+          "w-5 h-5",
+          isEraserMode
             ? "text-primary-foreground"
             : "text-muted-foreground group-hover:text-foreground"
         )} />

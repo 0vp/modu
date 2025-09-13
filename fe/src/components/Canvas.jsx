@@ -6,6 +6,7 @@ import { useDrawing } from '../contexts/DrawingContext'
 export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedImage, setUploadedImage }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isDrawing, setIsDrawing] = useState(false)
+  const [isErasing, setIsErasing] = useState(false)
   const [paths, setPaths] = useState([]) // Stores normalized paths (0-1 range)
   const [currentPath, setCurrentPath] = useState([])
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
@@ -18,7 +19,7 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
   const imageRef = useRef(null)
-  const { isDrawingMode } = useDrawing()
+  const { isDrawingMode, isEraserMode } = useDrawing()
 
   // Handle Space key press
   useEffect(() => {
@@ -82,6 +83,61 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
               return luminance > 0.5 ? '#000000' : '#FFFFFF'
             }
 
+            // Helper function to draw a hand-drawn squiggly circle
+            const drawSquigglyCircle = (ctx, centerX, centerY, radiusX, radiusY) => {
+              ctx.strokeStyle = '#FD4499'  // Pink color matching the UI theme
+              ctx.lineWidth = Math.max(3, Math.min(6, tempCanvas.width / 200))  // Adaptive line width
+              ctx.lineCap = 'round'
+              ctx.lineJoin = 'round'
+              ctx.setLineDash([])  // Solid line
+
+              ctx.beginPath()
+
+              // Generate points around an ellipse with random variations
+              const numPoints = 20 + Math.floor(Math.random() * 10)  // 20-30 points for organic look
+              const angleStep = (Math.PI * 2) / numPoints
+
+              // Store points to ensure we close the shape properly
+              const points = []
+
+              for (let i = 0; i <= numPoints; i++) {
+                const angle = i * angleStep
+
+                // Add random variations to make it look hand-drawn
+                const wobbleRadius = 0.05 + Math.random() * 0.15  // 5-20% variation
+                const wobbleAngle = Math.random() * 0.2 - 0.1  // Small angle variation
+
+                // Calculate base ellipse point
+                let rx = radiusX * (1 + (Math.random() - 0.5) * wobbleRadius)
+                let ry = radiusY * (1 + (Math.random() - 0.5) * wobbleRadius)
+
+                // Add slight waviness
+                const waveAmplitude = 0.03
+                rx += radiusX * waveAmplitude * Math.sin(angle * 3)
+                ry += radiusY * waveAmplitude * Math.cos(angle * 3)
+
+                const x = centerX + rx * Math.cos(angle + wobbleAngle)
+                const y = centerY + ry * Math.sin(angle + wobbleAngle)
+
+                if (i === 0) {
+                  ctx.moveTo(x, y)
+                  points.push({x, y})
+                } else if (i === numPoints) {
+                  // Close the shape by connecting to the first point with slight offset for organic look
+                  const firstPoint = points[0]
+                  ctx.lineTo(firstPoint.x + (Math.random() - 0.5) * 2, firstPoint.y + (Math.random() - 0.5) * 2)
+                } else {
+                  // Add slight curve between points for more organic look
+                  const prevX = centerX + radiusX * Math.cos(angle - angleStep/2 + wobbleAngle)
+                  const prevY = centerY + radiusY * Math.sin(angle - angleStep/2 + wobbleAngle)
+                  ctx.quadraticCurveTo(prevX, prevY, x, y)
+                  points.push({x, y})
+                }
+              }
+
+              ctx.stroke()
+            }
+
             furniturePins.forEach(pin => {
               const x = pin.x * tempCanvas.width
               const y = pin.y * tempCanvas.height
@@ -94,10 +150,22 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
               // Draw colored background with padding
               const textMetrics = tempCtx.measureText(label)
               const padding = 8  // Padding for better visibility
-              
+
               // Position label to the right of the pin
               const labelX = x + 20  // Offset to the right of pin
               const labelY = y  // Same vertical position as pin
+
+              // Calculate label box dimensions
+              const boxWidth = textMetrics.width + padding * 2
+              const boxHeight = fontSize + padding * 2
+
+              // Draw squiggly circle FIRST (behind the label)
+              const circleRadiusX = (boxWidth / 2) + 15  // Add extra space around the box
+              const circleRadiusY = (boxHeight / 2) + 12
+              const circleCenterX = labelX + (boxWidth / 2) - padding
+              const circleCenterY = labelY
+
+              drawSquigglyCircle(tempCtx, circleCenterX, circleCenterY, circleRadiusX, circleRadiusY)
 
               // Background rectangle with drop shadow effect
               // Draw shadow first
@@ -105,8 +173,8 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
               tempCtx.fillRect(
                 labelX - padding + 3,
                 labelY - fontSize/2 - padding + 3,
-                textMetrics.width + padding * 2,
-                fontSize + padding * 2
+                boxWidth,
+                boxHeight
               )
 
               // Then draw colored background
@@ -114,8 +182,8 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
               tempCtx.fillRect(
                 labelX - padding,
                 labelY - fontSize/2 - padding,
-                textMetrics.width + padding * 2,
-                fontSize + padding * 2
+                boxWidth,
+                boxHeight
               )
 
               // Draw border for definition
@@ -124,8 +192,8 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
               tempCtx.strokeRect(
                 labelX - padding,
                 labelY - fontSize/2 - padding,
-                textMetrics.width + padding * 2,
-                fontSize + padding * 2
+                boxWidth,
+                boxHeight
               )
 
               // Draw text with contrasting color
@@ -339,7 +407,7 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
   }
 
   const handleClick = () => {
-    if (!isDrawingMode) {
+    if (!isDrawingMode && !isEraserMode) {
       fileInputRef.current?.click()
     }
   }
@@ -400,8 +468,61 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
     }
   }, [uploadedImage, paths, currentPath, isDrawing])
 
+  // Eraser function to split paths where the eraser touches
+  const eraseAtPoint = (normalizedX, normalizedY) => {
+    const eraseRadius = 0.02 // 2% of canvas size for eraser radius
+
+    setPaths(prevPaths => {
+      const newPaths = []
+
+      prevPaths.forEach(path => {
+        let currentSegment = []
+        let lastPointWasErased = false
+
+        for (let i = 0; i < path.length; i++) {
+          const point = path[i]
+          const distance = Math.sqrt(
+            Math.pow(point.x - normalizedX, 2) +
+            Math.pow(point.y - normalizedY, 2)
+          )
+
+          if (distance > eraseRadius) {
+            // Point is outside eraser radius
+            if (lastPointWasErased && currentSegment.length > 0) {
+              // We were erasing, but now we're not - save the previous segment if it has points
+              if (currentSegment.length > 1) {
+                newPaths.push(currentSegment)
+              }
+              currentSegment = []
+            }
+            currentSegment.push(point)
+            lastPointWasErased = false
+          } else {
+            // Point is inside eraser radius - this creates a break in the path
+            lastPointWasErased = true
+          }
+        }
+
+        // Add any remaining segment
+        if (currentSegment.length > 1) {
+          newPaths.push(currentSegment)
+        }
+      })
+
+      return newPaths
+    })
+
+    // Mark as changed when erasing
+    if (paths.length > 0) {
+      setHasChanges(true)
+    }
+
+    // Trigger redraw
+    redrawCanvas(paths)
+  }
+
   const startDrawing = (e) => {
-    if (!isDrawingMode || !canvasRef.current || isInteractingWithPin) return
+    if ((!isDrawingMode && !isEraserMode) || !canvasRef.current || isInteractingWithPin) return
 
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
@@ -412,8 +533,15 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
     const normalizedX = x / canvas.width
     const normalizedY = y / canvas.height
 
-    setCurrentPath([{ x: normalizedX, y: normalizedY }])
-    setIsDrawing(true)
+    if (isEraserMode) {
+      // Start erasing
+      setIsErasing(true)
+      eraseAtPoint(normalizedX, normalizedY)
+    } else {
+      // Start drawing
+      setCurrentPath([{ x: normalizedX, y: normalizedY }])
+      setIsDrawing(true)
+    }
   }
 
   const redrawCanvas = (allPaths) => {
@@ -453,7 +581,21 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
   }
 
   const draw = (e) => {
-    if (!isDrawing || !isDrawingMode || !canvasRef.current) return
+    if ((!isDrawing && !isErasing) || !canvasRef.current) return
+
+    if (isErasing && isEraserMode) {
+      // Continue erasing
+      const canvas = canvasRef.current
+      const rect = canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const normalizedX = x / canvas.width
+      const normalizedY = y / canvas.height
+      eraseAtPoint(normalizedX, normalizedY)
+      return
+    }
+
+    if (!isDrawing || !isDrawingMode) return
 
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
@@ -479,6 +621,7 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
       setHasChanges(true) // Mark as changed when drawing is added
     }
     setIsDrawing(false)
+    setIsErasing(false)
   }
 
   const clearDrawing = () => {
@@ -593,6 +736,8 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
           "relative w-full h-full border-2 border-dashed rounded-lg transition-all flex items-center justify-center",
           isDrawingMode
             ? "cursor-crosshair"
+            : isEraserMode
+            ? "cursor-grab"
             : "cursor-pointer",
           isDragging
             ? "border-primary bg-primary/10"
@@ -679,7 +824,7 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
             ref={canvasRef}
             className="absolute pointer-events-none"
             style={{
-              pointerEvents: isDrawingMode ? 'auto' : 'none',
+              pointerEvents: (isDrawingMode || isEraserMode) ? 'auto' : 'none',
               position: 'absolute',
               width: 'auto',
               height: 'auto'
@@ -783,7 +928,7 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
 
         {uploadedImage && (
           <div className="absolute top-4 right-4 flex gap-2">
-            {isDrawingMode && (
+            {(isDrawingMode || isEraserMode) && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
