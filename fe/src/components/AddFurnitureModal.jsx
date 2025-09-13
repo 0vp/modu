@@ -1,26 +1,70 @@
 import { useState, useEffect } from 'react'
-import { X, Sofa } from 'lucide-react'
-import { cn } from '../lib/utils'
+import { X, Sofa, Loader2 } from 'lucide-react'
 
 export function AddFurnitureModal({ isOpen, onClose, onAdd }) {
   const [furnitureUrl, setFurnitureUrl] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (isOpen) {
       setFurnitureUrl('')
+      setError('')
     }
   }, [isOpen])
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (furnitureUrl.trim()) {
-      onAdd(furnitureUrl.trim())
+    if (!furnitureUrl.trim()) return
+
+    setIsLoading(true)
+    setError('')
+
+    try {
+      console.log('Sending URL to scrape:', furnitureUrl.trim())
+
+      // Encode the URL as a query parameter
+      const params = new URLSearchParams({ url: furnitureUrl.trim() })
+      const response = await fetch(`http://localhost:5000/scrape?${params}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        mode: 'cors',
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Scrape error:', errorText)
+        throw new Error(`Failed to scrape: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      console.log('Received scraped data:', data)
+
+      // Pass the scraped data to the parent component
+      onAdd({
+        url: furnitureUrl.trim(),
+        ...data
+      })
+
       onClose()
+    } catch (err) {
+      console.error('Error adding furniture:', err)
+
+      // Check if it's a network/CORS error
+      if (err.message === 'Failed to fetch') {
+        setError('Cannot connect to server. Make sure the backend is running with CORS enabled on port 5000.')
+      } else {
+        setError(err.message || 'Failed to add furniture. Please try again.')
+      }
+    } finally {
+      setIsLoading(false)
     }
   }
 
   const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget) {
+    if (e.target === e.currentTarget && !isLoading) {
       onClose()
     }
   }
@@ -40,7 +84,8 @@ export function AddFurnitureModal({ isOpen, onClose, onAdd }) {
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-accent rounded-md transition-colors"
+            disabled={isLoading}
+            className="p-1 hover:bg-accent rounded-md transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5 text-muted-foreground" />
           </button>
@@ -57,28 +102,43 @@ export function AddFurnitureModal({ isOpen, onClose, onAdd }) {
               value={furnitureUrl}
               onChange={(e) => setFurnitureUrl(e.target.value)}
               placeholder="https://furniture-store.com/product"
-              className="w-full px-3 py-2 bg-secondary/50 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full px-3 py-2 bg-secondary/50 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
               autoFocus
               required
+              disabled={isLoading}
             />
             <p className="mt-2 text-xs text-muted-foreground">
               Enter a link to a furniture product.
             </p>
+            {error && (
+              <p className="mt-2 text-xs text-destructive">
+                {error}
+              </p>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-foreground hover:bg-accent rounded-md transition-colors"
+              disabled={isLoading}
+              className="px-4 py-2 text-sm font-medium text-foreground hover:bg-accent rounded-md transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors"
+              disabled={isLoading}
+              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              Add
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Scraping...
+                </>
+              ) : (
+                'Add'
+              )}
             </button>
           </div>
         </form>

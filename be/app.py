@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
 import os
@@ -16,6 +17,8 @@ import threading
 load_dotenv()
 
 app = Flask(__name__)
+# Enable CORS for all routes and origins
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 DATA_FOLDER = 'product_data'
 CACHE_FILE = os.path.join(DATA_FOLDER, 'db.json')

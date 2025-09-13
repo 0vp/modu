@@ -1,3 +1,60 @@
 {
-    
+  "e973adf84b7b968997e0bc361aee5d53": {
+    "url": "https://www.leons.ca/products/fog-3-piece-queen-bed-package-white-black",
+    "status_code": 200,
+    "title": "Fog 3-Piece Queen Bed Package - White, Black | Leon's\n",
+    "products": [
+      {
+        "title": "Fog 3-Piece Queen Bed - White, Black",
+        "description": "The Fog 3Piece Queen Bed package includes a queensize headboard, footboard and side rails finished in a striking twotone design: a white tilelike pattern set within a sleek black panel base on the headboard, and a rectangular white panel on a black panel base on the footboard. Black tapered feet add a modern touch. The bed features solid tropical wood construction with laminated paper veneer, slats and support legs for extra strength, and requires a boxspring. Care instructions: clean wood surfaces with a damp cloth, avoid strong cleaners, wipe spills immediately, and use coasters. Warranty: oneyear against manufacturing defects. The package is sold as a queensize headboard, footboard and side rails.",
+        "price": "$349.00",
+        "dimensions": "Width: 63.5\" (161 cm); Height: 56.5\" (144 cm); Depth: 84\" (213 cm)",
+        "images": [
+          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed_1.jpg",
+          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed.jpg",
+          "https://www.leons.ca/cdn/shop/products/23780132_Frost_Bed_SW.jpg"
+        ],
+        "material": "Solid tropical wood with laminated paper veneer",
+        "color": "White, Black",
+        "sku": "23780132",
+        "availability": "In stock (local delivery available)",
+        "features": "Modern twotone geometric design; black tapered feet; slats and support legs for durability; requires boxspring; oneyear warranty; care instructions for wood surfaces"
+      }
+    ],
+    "timestamp": "2025-09-13T12:07:11.562831",
+    "collage_path": "/Users/q/Desktop/projects/modu/be/product_data/e973adf84b7b968997e0bc361aee5d53.jpg",
+    "collage_generating": true
+  },
+  "b37df626c5c906c9c9eb9689c84d464e": {
+    "url": "https://www.ikea.com/ca/en/p/finnala-sofa-gunnared-beige-s39319059/#content",
+    "status_code": 200,
+    "title": "FINNALA sofa, Gunnared beige - IKEA CA",
+    "products": [
+      {
+        "title": "FINNALA Sofa, Gunnared beige",
+        "description": "The FINNALA threeseater sofa in Gunnared beige is a modular, customizable sectional that can grow with your home. It features a clean, contemporary design with a softwashable, dopedyed Gunnared fabric made from 100 % polyester (minimum 90 % recycled) that has a woollike feel and a twotone melange effect. The cover is removable and machinewashable. The sofas seat cushions use highresilience polyurethane foam (cold foam) with a pocketspring unit for lasting comfort and support, while the back cushions combine cut polyurethane foam with polyester fibers. The frame is built from plywood, particleboard, solid wood, fiberboard and polypropylene legs, reinforced with steel crossrails and an epoxy/polyester powdercoated finish. It includes a 10year limited warranty and comes with a set of modular sections (armrest, sofa section, frame) that can be combined in different configurations. Care instructions recommend wiping with a damp cloth, machinewashing the removable covers at warm temperature, and avoiding bleach, tumbledrying, and ironing on high heat. Dimensions: Height including back cushions 85 cm, backrest height 71 cm, width 241 cm, depth 98 cm, height under furniture 6 cm, armrest width 15 cm, armrest height 71 cm, seat width 211 cm, seat depth 55 cm, seat height 48 cm. The product ships in 12 packages. Article Number (SKU) 393.190.59.",
+        "price": "$999.00",
+        "dimensions": "Height (incl. back cushions): 85 cm; Backrest height: 71 cm; Width: 241 cm; Depth: 98 cm; Height under furniture: 6 cm; Armrest width: 15 cm; Armrest height: 71 cm; Seat width: 211 cm; Seat depth: 55 cm; Seat height: 48 cm",
+        "images": [
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0514366_pe639439_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0787232_pe763195_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0686033_pe721555_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0823119_pe641640_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0733543_ph152707_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0823121_pe641656_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0820541_pe641657_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0891165_ph168966_s5.jpg",
+          "https://www.ikea.com/ca/en/images/products/finnala-sofa-gunnared-beige__0818972_pe774672_s5.jpg"
+        ],
+        "material": "Cover: 100 % polyester (min. 90 % recycled), dopedyed Gunnared fabric; Seat cushion: highresilience polyurethane foam, polyester wadding; Pocketspring unit: steel; Frame: plywood, particleboard, solid wood, fiberboard, polypropylene; Leg: polypropylene; Crossrail: steel with epoxy/polyester powder coating; Back fabric: 100 % recycled polyester; Armrest cover: 100 % polyester (min. 90 % recycled)",
+        "color": "Gunnared beige",
+        "sku": "393.190.59",
+        "availability": "Not specified",
+        "features": "10year limited warranty; Softwashable, removable cover; Pocketspring seat cushions; Highresilience foam; Modular design  can add sections; Machinewashable cover; Durable steel and wood frame; Available in multiple colors via planner tool"
+      }
+    ],
+    "timestamp": "2025-09-13T12:08:41.166307",
+    "collage_path": "/Users/q/Desktop/projects/modu/be/product_data/b37df626c5c906c9c9eb9689c84d464e.jpg",
+    "collage_generating": true
+  }
 }
