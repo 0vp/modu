@@ -35,14 +35,14 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "h-full bg-gray-50 border-r border-gray-200 transition-all duration-300 flex flex-col",
+        "h-full bg-card border-r border-border transition-all duration-300 flex flex-col",
         isCollapsed ? "w-16" : "w-64"
       )}
     >
-      <div className="p-3 border-b border-gray-200">
+      <div className="p-3 border-b border-border">
         <div className="flex items-center gap-2">
           <button
-            className="flex-shrink-0 w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors"
+            className="flex-shrink-0 w-10 h-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center justify-center transition-colors"
             title="Add new"
           >
             <Plus className="w-5 h-5" />
@@ -50,13 +50,13 @@ export function Sidebar() {
 
           {!isCollapsed && (
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-9 pr-3 py-2 bg-secondary/50 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
           )}
@@ -66,16 +66,16 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto">
         {!isCollapsed && (
           <div className="p-3">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Tools</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Tools</h3>
             <div className="space-y-1">
               {tools.map((tool) => (
                 <button
                   key={tool.name}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors group"
+                  className="w-full flex items-center gap-3 px-3 py-2 text-sm text-foreground hover:bg-accent rounded-lg transition-colors group"
                 >
-                  <tool.icon className="w-4 h-4 text-gray-600 group-hover:text-gray-900" />
+                  <tool.icon className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
                   <span className="flex-1 text-left">{tool.name}</span>
-                  <span className="text-xs text-gray-400">{tool.shortcut}</span>
+                  <span className="text-xs text-muted-foreground">{tool.shortcut}</span>
                 </button>
               ))}
             </div>
@@ -87,20 +87,20 @@ export function Sidebar() {
             {tools.slice(0, 5).map((tool) => (
               <button
                 key={tool.name}
-                className="w-full p-3 flex items-center justify-center text-gray-600 hover:bg-gray-100 rounded-lg transition-colors group"
+                className="w-full p-3 flex items-center justify-center text-muted-foreground hover:bg-accent rounded-lg transition-colors group"
                 title={tool.name}
               >
-                <tool.icon className="w-5 h-5 group-hover:text-gray-900" />
+                <tool.icon className="w-5 h-5 group-hover:text-foreground" />
               </button>
             ))}
           </div>
         )}
       </div>
 
-      <div className="p-3 border-t border-gray-200">
+      <div className="p-3 border-t border-border">
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="w-full flex items-center justify-center p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          className="w-full flex items-center justify-center p-2 text-muted-foreground hover:bg-accent rounded-lg transition-colors"
         >
           {isCollapsed ? (
             <ChevronRight className="w-5 h-5" />

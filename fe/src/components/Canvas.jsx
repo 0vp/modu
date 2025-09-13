@@ -57,7 +57,7 @@ export function Canvas() {
   }
 
   return (
-    <div className="flex-1 bg-gray-100 overflow-hidden relative">
+    <div className="flex-1 bg-secondary/50 dark:bg-background overflow-hidden relative">
       <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
 
       <div className="h-full flex items-center justify-center p-8">
@@ -70,8 +70,8 @@ export function Canvas() {
           className={cn(
             "w-full max-w-3xl h-96 border-2 border-dashed rounded-lg transition-all cursor-pointer",
             isDragging
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50"
+              ? "border-primary bg-primary/10"
+              : "border-border bg-card dark:bg-card/50 hover:border-primary/50 hover:bg-secondary"
           )}
         >
           <input
@@ -91,10 +91,10 @@ export function Canvas() {
               />
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-gray-500">
-              <div className="mb-4 p-4 bg-gray-100 rounded-full">
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+              <div className="mb-4 p-4 bg-secondary/50 rounded-full">
                 {isDragging ? (
-                  <Upload className="w-8 h-8 text-blue-500" />
+                  <Upload className="w-8 h-8 text-primary" />
                 ) : (
                   <ImageIcon className="w-8 h-8" />
                 )}
@@ -104,11 +104,11 @@ export function Canvas() {
                 {isDragging ? "Drop your image here" : "Drag & drop an image"}
               </p>
 
-              <p className="text-sm text-gray-400 mb-4">
+              <p className="text-sm text-muted-foreground/70 mb-4">
                 or click to browse
               </p>
 
-              <div className="flex items-center gap-4 text-xs text-gray-400">
+              <div className="flex items-center gap-4 text-xs text-muted-foreground/60">
                 <span>PNG</span>
                 <span>•</span>
                 <span>JPG</span>
@@ -128,7 +128,7 @@ export function Canvas() {
             e.stopPropagation()
             setUploadedImage(null)
           }}
-          className="absolute top-4 right-4 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 shadow-sm transition-colors"
+          className="absolute top-4 right-4 px-3 py-1.5 bg-card hover:bg-accent border border-border rounded-lg text-sm text-foreground shadow-sm transition-colors"
         >
           Clear Canvas
         </button>

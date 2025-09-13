@@ -2,10 +2,12 @@ import { Navbar } from './components/Navbar'
 import { Sidebar } from './components/Sidebar'
 import { Canvas } from './components/Canvas'
 import { FloatingBar } from './components/FloatingBar'
+import { ThemeProvider } from './contexts/ThemeContext'
 
 function App() {
   return (
-    <div className="h-screen flex flex-col bg-white overflow-hidden">
+    <ThemeProvider>
+      <div className="h-screen flex flex-col bg-background overflow-hidden">
       <Navbar />
 
       <div className="flex-1 flex overflow-hidden">
@@ -13,8 +15,9 @@ function App() {
         <Canvas />
       </div>
 
-      <FloatingBar />
-    </div>
+        <FloatingBar />
+      </div>
+    </ThemeProvider>
   )
 }
 
