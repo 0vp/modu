@@ -76,9 +76,9 @@ export class PointCloudScene {
      * Create a highlighted cuboid for indicating position in the PLY model scene
      */
     private createHighlightedCuboid(): void {
-        // Create new highlighted cuboid instance with smaller size for orthographic view
-        // Using much smaller dimensions to fit properly in the scaled PLY model scene
-        this.highlightedCuboid = new HighlightedCuboid(this.scene, 0.2, 0.6, 0.2); // Much smaller: 0.2x0.6x0.2
+        // Create new highlighted cuboid instance with appropriate size for visibility
+        // Using larger dimensions to be clearly visible in the PLY model scene
+        this.highlightedCuboid = new HighlightedCuboid(this.scene, 1.0, 2.5, 1.0); // Larger: 1.0x2.5x1.0
         
         // Position the cuboid at origin initially (will be synced with handle position)
         this.highlightedCuboid.setPosition(0, 0, 0);
@@ -220,10 +220,40 @@ export class PointCloudScene {
         // Keep PLY model static (no rotation) for better furniture viewing
         // The model should remain in its natural orientation for the front view
         
-        // Animate the highlighted cuboid with pulsing effect
+        // Animate the highlighted cuboid with pulsing effect and distance-based scaling
         if (this.highlightedCuboid) {
             this.highlightedCuboid.animate();
+            this.updateCuboidScaling();
         }
+    }
+
+    /**
+     * Update cuboid scaling based on distance from camera for better depth perception in orthographic view
+     */
+    private updateCuboidScaling(): void {
+        if (!this.highlightedCuboid) return;
+
+        const cuboidMesh = this.highlightedCuboid.getMesh();
+        const cuboidPosition = cuboidMesh.position;
+        const cameraPosition = this.camera.position;
+        
+        // Calculate actual 3D distance from camera to cuboid
+        const distance = cameraPosition.distanceTo(cuboidPosition);
+        
+        // Calculate scale factor based on distance from camera
+        // Objects further away should appear smaller
+        const baseDistance = 10; // Reference distance where scale = 1.0 (camera is at Z=10)
+        const minScale = 0.3; // Minimum scale for far objects
+        const maxScale = 2.0; // Maximum scale for near objects
+        
+        // Inverse scaling: closer objects are larger, further objects are smaller
+        let scaleFactor = baseDistance / distance;
+        scaleFactor = Math.max(minScale, Math.min(maxScale, scaleFactor));
+        
+        // Apply the scale to both cuboid and wireframe
+        cuboidMesh.scale.setScalar(scaleFactor);
+        const wireframe = this.highlightedCuboid.getWireframe();
+        wireframe.scale.setScalar(scaleFactor);
     }
 
     /**

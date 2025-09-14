@@ -16,6 +16,9 @@ export class TopDownViewManager {
     private selectedObject: THREE.Object3D | null = null;
     private raycaster: THREE.Raycaster;
     private pointer: THREE.Vector2;
+    private renderer: THREE.WebGLRenderer | null = null;
+    private viewportInfo: { left: number, bottom: number, width: number, height: number } | null = null;
+    private canvasRect: DOMRect | null = null;
 
     // Event callbacks
     private onHandlePositionChange: ((x: number, z: number) => void) | null = null;
@@ -67,6 +70,9 @@ export class TopDownViewManager {
         // Add neutral background
         scene.background = new THREE.Color(0x222222);
 
+        // Add a grid below the PLY model for better spatial reference
+        this.createGrid(scene);
+
         return scene;
     }
 
@@ -85,6 +91,8 @@ export class TopDownViewManager {
      * @param renderer The THREE.js WebGL renderer
      */
     initializeControls(renderer: THREE.WebGLRenderer): void {
+        this.renderer = renderer;
+        
         // Create TransformControls for the handle
         this.transformControls = new TransformControls(this.camera, renderer.domElement);
         this.transformControls.setMode('translate');
@@ -119,6 +127,9 @@ export class TopDownViewManager {
                 position.y = 0.1;
             }
         });
+
+        // Add mouse move event listener for continuous raycasting when handle is selected
+        renderer.domElement.addEventListener('pointermove', this.onPointerMove.bind(this), false);
 
         this.scene.add(this.transformControls as unknown as THREE.Object3D);
         this.isInitialized = true;
@@ -197,6 +208,30 @@ export class TopDownViewManager {
     }
 
     /**
+     * Create a grid below the PLY model for spatial reference
+     */
+    private createGrid(scene: THREE.Scene): void {
+        // Create a grid helper
+        const gridHelper = new THREE.GridHelper(10, 20, 0x404040, 0x404040);
+        gridHelper.position.y = -0.05; // Position slightly below ground level
+        scene.add(gridHelper);
+
+        // Also create an invisible ground plane for raycasting
+        const groundGeometry = new THREE.PlaneGeometry(20, 20);
+        const groundMaterial = new THREE.MeshBasicMaterial({
+            visible: false, // Make it invisible but still raycastable
+            side: THREE.DoubleSide
+        });
+        const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+        groundPlane.rotation.x = -Math.PI / 2; // Rotate to lay flat
+        groundPlane.position.y = 0; // At ground level
+        scene.add(groundPlane);
+        
+        // Store reference for raycasting
+        scene.userData.groundPlane = groundPlane;
+    }
+
+    /**
      * Handle pointer down events for object selection and movement
      * @param event Pointer event from the renderer's canvas
      * @param canvasRect The canvas bounding rectangle
@@ -204,6 +239,10 @@ export class TopDownViewManager {
      */
     handlePointerDown(event: PointerEvent, canvasRect: DOMRect, viewportInfo: { left: number, bottom: number, width: number, height: number }): void {
         if (!this.transformControls) return;
+
+        // Store viewport info and canvas rect for mouse move events
+        this.viewportInfo = viewportInfo;
+        this.canvasRect = canvasRect;
 
         // Convert screen coordinates to normalized device coordinates for this viewport
         const x = ((event.clientX - canvasRect.left - viewportInfo.left) / viewportInfo.width) * 2 - 1;
@@ -217,40 +256,67 @@ export class TopDownViewManager {
         const handleIntersects = this.raycaster.intersectObjects(intersectableMeshes, false);
 
         if (handleIntersects.length > 0) {
-            // Handle was clicked - select it
-            this.selectHandle();
-        } else {
-            // Clicked elsewhere - check if handle is selected and if we can move it
+            // Handle was clicked
             if (this.indicatorHandle.isSelectedState()) {
-                // Handle is selected, try to move it to the mouse position
-                this.moveHandleToMousePosition();
-                this.indicatorHandle.setSelected(false);
+                // Handle is already selected - exit edit mode
+                this.deselectHandle();
             } else {
-                // Handle not selected - deselect it
+                // Handle not selected - select it to enter edit mode
+                this.selectHandle();
+            }
+        } else {
+            // Clicked elsewhere
+            if (this.indicatorHandle.isSelectedState()) {
+                // Handle is selected - exit edit mode
                 this.deselectHandle();
             }
+            // If handle is not selected, do nothing (don't move it)
         }
+    }
+
+    /**
+     * Handle pointer move events for continuous raycasting when handle is selected
+     * @param event Pointer event from the renderer's canvas
+     */
+    private onPointerMove(event: PointerEvent): void {
+        if (!this.indicatorHandle.isSelectedState() || !this.viewportInfo || !this.canvasRect) {
+            return; // Only raycast when handle is selected and we have viewport info
+        }
+
+        // Convert screen coordinates to normalized device coordinates for this viewport
+        const x = ((event.clientX - this.canvasRect.left - this.viewportInfo.left) / this.viewportInfo.width) * 2 - 1;
+        const y = -((event.clientY - this.canvasRect.top - (this.canvasRect.height - this.viewportInfo.bottom - this.viewportInfo.height)) / this.viewportInfo.height) * 2 + 1;
+
+        // Check if mouse is within the viewport bounds
+        if (x < -1 || x > 1 || y < -1 || y > 1) {
+            return; // Mouse is outside the viewport
+        }
+
+        this.pointer.set(x, y);
+        this.raycaster.setFromCamera(this.pointer, this.camera);
+
+        // Perform raycasting to move handle
+        this.moveHandleToMousePosition();
     }
 
     /**
      * Move the handle to the current mouse position by raycasting against the PLY model or ground plane
      */
     private moveHandleToMousePosition(): void {
-        // First try to intersect with the PLY model
+        // Try to intersect with both the PLY model and the ground plane
         const plyMesh = this.scene.userData.mesh;
+        const groundPlane = this.scene.userData.groundPlane;
         const intersectionObjects: THREE.Object3D[] = [];
         
+        // Add PLY model if it exists
         if (plyMesh) {
             intersectionObjects.push(plyMesh);
         }
         
-        // Create a ground plane for fallback intersection
-        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
-        const groundMaterial = new THREE.MeshBasicMaterial({ visible: false });
-        const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-        groundPlane.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-        groundPlane.position.y = 0; // Position at ground level
-        intersectionObjects.push(groundPlane);
+        // Add the permanent ground plane for raycasting
+        if (groundPlane) {
+            intersectionObjects.push(groundPlane);
+        }
 
         const intersects = this.raycaster.intersectObjects(intersectionObjects, false);
         
@@ -264,10 +330,6 @@ export class TopDownViewManager {
                 this.onHandlePositionChange(intersectionPoint.x, intersectionPoint.z);
             }
         }
-        
-        // Clean up the temporary ground plane
-        groundPlane.geometry.dispose();
-        groundPlane.material.dispose();
     }
 
     /**

@@ -83,7 +83,7 @@ export class HighlightedCuboid {
             ];
             
             const curve = new THREE.CatmullRomCurve3(points);
-            const tubeGeometry = new THREE.TubeGeometry(curve, 1, 0.3, 4, false);
+            const tubeGeometry = new THREE.TubeGeometry(curve, 1, 0.05, 4, false); // Reduced radius from 0.3 to 0.05
             const tubeMesh = new THREE.Mesh(tubeGeometry, wireframeMaterial);
             
             wireframeGroup.add(tubeMesh);

@@ -21,6 +21,11 @@ const views: ViewDef[] = [];
 const BORDER_PX = 2; // width of the border in pixels
 const BORDER_COLOR = 0x444444; // border color
 
+// Point cloud oscillation animation variables
+let pointCloudRotationDirection = 1; // 1 for right, -1 for left
+let pointCloudCurrentRotation = 0; // Current rotation in radians
+const pointCloudMaxRotation = Math.PI / 4; // 45 degrees in radians
+
 // Function to create a scene with an image texture
 function createImageScene(imagePath: string) {
   const scene = new THREE.Scene();
@@ -177,6 +182,120 @@ function createPLYScene(modelPath: string) {
   return scene;
 }
 
+// Function to create a point cloud scene using depth and RGB images
+function createPointCloudScene() {
+  const scene = new THREE.Scene();
+
+  // Set dark background for better point cloud visibility
+  scene.background = new THREE.Color(0x111111);
+
+  // Add ambient lighting for overall illumination
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
+
+  // Add directional light for depth perception
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+  directionalLight.position.set(5, 5, 5);
+  scene.add(directionalLight);
+
+  // Create point cloud from depth and RGB images
+  const loader = new THREE.TextureLoader();
+  
+  // Load both depth and RGB textures
+  Promise.all([
+    new Promise<THREE.Texture>((resolve, reject) => {
+      loader.load('depth.png', resolve, undefined, reject);
+    }),
+    new Promise<THREE.Texture>((resolve, reject) => {
+      loader.load('rgb.png', resolve, undefined, reject);
+    })
+  ]).then(([depthTexture, rgbTexture]) => {
+    createPointCloudFromTextures(scene, depthTexture, rgbTexture);
+  }).catch((error) => {
+    console.error('Error loading point cloud textures:', error);
+    // Create fallback visualization
+    const fallbackGeometry = new THREE.BoxGeometry(2, 2, 2);
+    const fallbackMaterial = new THREE.MeshStandardMaterial({
+      color: 0xff6b6b,
+      roughness: 0.3,
+      metalness: 0.1
+    });
+    const fallbackMesh = new THREE.Mesh(fallbackGeometry, fallbackMaterial);
+    scene.add(fallbackMesh);
+    scene.userData.mesh = fallbackMesh;
+  });
+
+  return scene;
+}
+
+// Function to create point cloud geometry from depth and RGB textures
+function createPointCloudFromTextures(scene: THREE.Scene, depthTexture: THREE.Texture, rgbTexture: THREE.Texture) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  
+  // Get image data from textures
+  const depthImage = depthTexture.image;
+  const rgbImage = rgbTexture.image;
+  
+  canvas.width = depthImage.width;
+  canvas.height = depthImage.height;
+  
+  // Draw depth image to canvas to get pixel data
+  ctx.drawImage(depthImage, 0, 0);
+  const depthData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  
+  // Draw RGB image to canvas to get pixel data
+  ctx.drawImage(rgbImage, 0, 0);
+  const rgbData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  
+  // Create point cloud geometry
+  const positions = [];
+  const colors = [];
+  
+  const width = canvas.width;
+  const height = canvas.height;
+  
+  for (let y = 0; y < height; y += 2) { // Skip every other pixel for performance
+    for (let x = 0; x < width; x += 2) {
+      const index = (y * width + x) * 4;
+      
+      // Get depth value (using red channel, assuming grayscale depth map)
+      const depth = depthData.data[index] / 255.0;
+      
+      if (depth > 0.1) { // Only create points for valid depth values
+        // Convert pixel coordinates to 3D world coordinates
+        const worldX = (x / width - 0.5) * 4; // Reduced scale from 10 to 4
+        const worldY = -(y / height - 0.5) * 4; // Reduced scale from 10 to 4
+        const worldZ = depth * 2; // Reduced scale from 5 to 2
+        
+        positions.push(worldX, worldY, worldZ);
+        
+        // Get RGB color
+        const r = rgbData.data[index] / 255.0;
+        const g = rgbData.data[index + 1] / 255.0;
+        const b = rgbData.data[index + 2] / 255.0;
+        
+        colors.push(r, g, b);
+      }
+    }
+  }
+  
+  // Create point cloud
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  
+  const material = new THREE.PointsMaterial({
+    size: 0.02, // Reduced from 0.05 to 0.02
+    vertexColors: true,
+    sizeAttenuation: true
+  });
+  
+  const pointCloud = new THREE.Points(geometry, material);
+  scene.add(pointCloud);
+  scene.userData.pointCloud = pointCloud;
+}
+
 function init() {
   // -- View Definitions --
   // Based on the layout from the image.
@@ -287,7 +406,18 @@ function init() {
     name: 'PLY Model Display'
   });
 
-  // Position cameras for views 2, 3, and 4 (View 1 camera is managed by PointCloudScene)
+  // View 5: Point Cloud view - bottom left of entire screen
+  views.push({
+    left: 0.05, // Small margin from left edge
+    bottom: 0.05, // Small margin from bottom edge
+    width: 0.18, // Same width as View 4
+    height: 0.28, // Same height as View 4
+    camera: new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000),
+    scene: createPointCloudScene(), // Create point cloud scene
+    name: 'Point Cloud View'
+  });
+
+  // Position cameras for views 2, 3, 4, and 5 (View 1 camera is managed by PointCloudScene)
   // Skip View 2 since it has an orthographic camera already positioned
   for (let i = 1; i < views.length; i++) {
     if (views[i].camera instanceof THREE.PerspectiveCamera) {
@@ -385,14 +515,16 @@ function animate() {
   // Animate objects in each scene
   views.forEach((view, index) => {
     if (index === 0 && view.pointCloudScene) {
-      // Handle point cloud scene animation
+      // Handle point cloud scene animation (View 1)
       view.pointCloudScene.animate();
     } else if (index === 1 && view.topDownViewManager) {
-      // Handle top-down view manager animation
+      // Handle top-down view manager animation (View 2)
       view.topDownViewManager.animate();
     } else {
       // Handle regular mesh animation for other views
       const mesh = view.scene.userData.mesh;
+      const pointCloud = view.scene.userData.pointCloud;
+      
       if (mesh) {
         if (index === 2) { // View 3 (depth image) - no rotation
           // Keep image static
@@ -402,6 +534,25 @@ function animate() {
           mesh.rotation.x += 0.005;
           mesh.rotation.y += 0.01;
         }
+      }
+      
+      if (pointCloud && index === 4) { // View 5 (point cloud) - oscillating rotation
+        const rotationSpeed = 0.01;
+        
+        // Update current rotation
+        pointCloudCurrentRotation += rotationSpeed * pointCloudRotationDirection;
+        
+        // Check if we've reached the maximum rotation in either direction
+        if (pointCloudCurrentRotation >= pointCloudMaxRotation) {
+          pointCloudCurrentRotation = pointCloudMaxRotation;
+          pointCloudRotationDirection = -1; // Switch to rotating left
+        } else if (pointCloudCurrentRotation <= -pointCloudMaxRotation) {
+          pointCloudCurrentRotation = -pointCloudMaxRotation;
+          pointCloudRotationDirection = 1; // Switch to rotating right
+        }
+        
+        // Apply the rotation
+        pointCloud.rotation.y = pointCloudCurrentRotation;
       }
     }
   });
