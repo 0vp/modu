@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depth Map to 3D Point Cloud</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #111;
+            color: #fff;
+        }
+        #info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 15px 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            width: 300px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 1.2em;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+        .control-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+        #three-canvas {
+            display: block; /* remove canvas default margin */
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            transition: opacity 0.5s;
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="info-panel">
+        <h1>Point Cloud Controls</h1>
+
+        <div class="control-group">
+            <label for="fov-slider">FOV Correction: <span id="fov-value">75</span>°</label>
+            <input type="range" id="fov-slider" min="10" max="150" value="75">
+            <small>Adjust to flatten perspective distortion.</small>
+        </div>
+
+        <div class="control-group">
+            <label for="rotX-slider">X-Axis Rotation: <span id="rotX-value">0</span>°</label>
+            <input type="range" id="rotX-slider" min="-180" max="180" value="0">
+        </div>
+
+        <div class="control-group">
+            <label for="rotY-slider">Y-Axis Rotation: <span id="rotY-value">0</span>°</label>
+            <input type="range" id="rotY-slider" min="-180" max="180" value="0">
+        </div>
+
+        <div class="control-group">
+            <label for="rotZ-slider">Z-Axis Rotation: <span id="rotZ-value">0</span>°</label>
+            <input type="range" id="rotZ-slider" min="-180" max="180" value="0">
+        </div>
+
+        <div class="control-group">
+            <label for="ortho-toggle">Projection Mode:</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.85em;"> 
+                <input type="checkbox" id="ortho-toggle"> Orthographic (toggle)
+            </label>
+            <small id="projection-hint">Perspective active</small>
+        </div>
+
+        <div class="control-group">
+            <label>Cuboid Orientation (°)</label>
+            <label for="cuboid-rotX">Pitch X: <span id="cuboid-rotX-value">0</span></label>
+            <input type="range" id="cuboid-rotX" min="-180" max="180" value="0">
+            <label for="cuboid-rotY">Yaw Y: <span id="cuboid-rotY-value">0</span></label>
+            <input type="range" id="cuboid-rotY" min="-180" max="180" value="0">
+            <label for="cuboid-rotZ">Roll Z: <span id="cuboid-rotZ-value">0</span></label>
+            <input type="range" id="cuboid-rotZ" min="-180" max="180" value="0">
+            <small>Adjust bookshelf cuboid orientation independently of point cloud.</small>
+        </div>
+    </div>
+
+    <div id="loading" class="loading-overlay">
+        <span>Loading image assets...</span>
+    </div>
+
+    <canvas id="three-canvas"></canvas>
+
+    <!-- Import Three.js and OrbitControls -->
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+
+        // Perspective camera (default)
+        const perspectiveCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        perspectiveCamera.position.z = 150;
+
+        // Orthographic camera (created with an initial frustum size)
+        const frustumSize = 200; // Adjust to taste
+        const aspectInitial = window.innerWidth / window.innerHeight;
+        const orthoCamera = new THREE.OrthographicCamera(
+            (-frustumSize * aspectInitial) / 2,
+            (frustumSize * aspectInitial) / 2,
+            frustumSize / 2,
+            -frustumSize / 2,
+            -1000,
+            1000
+        );
+        orthoCamera.position.set(0, 0, 150);
+
+        // Active camera reference (starts as perspective)
+        let camera = perspectiveCamera;
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-canvas'), antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        // --- ORBIT CONTROLS (re-created on projection switch) ---
+        let controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // For a smoother feel
+        controls.dampingFactor = 0.05;
+
+        // --- POINT CLOUD OBJECT ---
+        // We will create this once the image loads and update it when sliders change.
+        let pointCloud;
+
+        // --- CUBOID & TRANSFORM CONTROLS ---
+        // Bookshelf-style upright cuboid representing a selectable, translatable zone/object.
+        // Dimensions chosen to emphasize verticality: width, height, depth.
+        const CUBOID_WIDTH = 10;
+        const CUBOID_HEIGHT = 40; // Tall like a bookshelf
+        const CUBOID_DEPTH = 20;
+        const cuboidGeometry = new THREE.BoxGeometry(CUBOID_WIDTH, CUBOID_HEIGHT, CUBOID_DEPTH);
+        const cuboidMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffaa }); // Solid fill color
+        const cuboid = new THREE.Mesh(cuboidGeometry, cuboidMaterial);
+        // Stand upright: Y axis is vertical; geometry already centered so lift by half height so base sits at y=0.
+        cuboid.position.set(0, CUBOID_HEIGHT * 0.5, -60);
+        // Add colored wireframe outline for clearer edges.
+        const edgesGeom = new THREE.EdgesGeometry(cuboidGeometry);
+        const wireframe = new THREE.LineSegments(
+            edgesGeom,
+            new THREE.LineBasicMaterial({ color: 0xff4080 }) // Distinct edge color
+        );
+        cuboid.add(wireframe);
+        scene.add(cuboid);
+
+        let transformControls = new TransformControls(camera, renderer.domElement);
+        transformControls.setMode('translate');
+        transformControls.setTranslationSnap(1);
+        transformControls.addEventListener('dragging-changed', (e) => {
+            controls.enabled = !e.value; // disable orbit while translating
+        });
+        scene.add(transformControls);
+
+        let selectedObject = null;
+
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+
+    function onPointerDown(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            const intersects = raycaster.intersectObjects([cuboid], true); // include wireframe child
+            if (intersects.length) {
+                if (selectedObject !== cuboid) {
+                    selectedObject = cuboid;
+                    transformControls.attach(cuboid);
+                }
+            } else {
+                selectedObject = null;
+                transformControls.detach();
+            }
+        }
+        renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+        // --- UI & SLIDERS ---
+        const fovSlider = document.getElementById('fov-slider');
+        const rotXSlider = document.getElementById('rotX-slider');
+        const rotYSlider = document.getElementById('rotY-slider');
+        const rotZSlider = document.getElementById('rotZ-slider');
+        
+    const fovValue = document.getElementById('fov-value');
+    const rotXValue = document.getElementById('rotX-value');
+    const rotYValue = document.getElementById('rotY-value');
+    const rotZValue = document.getElementById('rotZ-value');
+    const orthoToggle = document.getElementById('ortho-toggle');
+    const projectionHint = document.getElementById('projection-hint');
+    // Cuboid orientation slider elements
+    const cuboidRotX = document.getElementById('cuboid-rotX');
+    const cuboidRotY = document.getElementById('cuboid-rotY');
+    const cuboidRotZ = document.getElementById('cuboid-rotZ');
+    const cuboidRotXValue = document.getElementById('cuboid-rotX-value');
+    const cuboidRotYValue = document.getElementById('cuboid-rotY-value');
+    const cuboidRotZValue = document.getElementById('cuboid-rotZ-value');
+        const loadingOverlay = document.getElementById('loading');
+        
+        // --- IMAGE PROCESSING & POINT CLOUD GENERATION ---
+        
+        // Use a loading manager to handle multiple files
+        const manager = new THREE.LoadingManager();
+        const textureLoader = new THREE.TextureLoader(manager);
+
+        let depthTexture, colorTexture;
+
+        textureLoader.load('depth.png', (texture) => {
+            depthTexture = texture;
+        });
+
+        textureLoader.load('rgb.png', (texture) => {
+            colorTexture = texture;
+        });
+        
+        // This function runs when all files managed by the manager are loaded
+        manager.onLoad = () => {
+            const depthImg = depthTexture.image;
+            const colorImg = colorTexture.image;
+
+            let { width, height } = depthImg;
+            const maxResolution = 512 * 512; // Cap resolution for performance
+
+            // Downsample if the image is too large
+            if (width * height > maxResolution) {
+                const ratio = Math.sqrt(maxResolution / (width * height));
+                width = Math.floor(width * ratio);
+                height = Math.floor(height * ratio);
+                console.log(`Images downsampled to ${width}x${height}`);
+            }
+
+            // Create a canvas for the depth data
+            const depthCanvas = document.createElement('canvas');
+            depthCanvas.width = width;
+            depthCanvas.height = height;
+            const depthCtx = depthCanvas.getContext('2d', { willReadFrequently: true });
+            depthCtx.drawImage(depthImg, 0, 0, width, height);
+            const depthImageData = depthCtx.getImageData(0, 0, width, height).data;
+
+            // Create a canvas for the color data
+            const colorCanvas = document.createElement('canvas');
+            colorCanvas.width = width;
+            colorCanvas.height = height;
+            const colorCtx = colorCanvas.getContext('2d', { willReadFrequently: true });
+            colorCtx.drawImage(colorImg, 0, 0, width, height);
+            const colorImageData = colorCtx.getImageData(0, 0, width, height).data;
+
+            // --- SOLUTION TO THE PERSPECTIVE DISTORTION PROBLEM ---
+            // This function recalculates point positions based on the FOV correction slider.
+            function generatePointCloud(fovCorrection) {
+                const fov = THREE.MathUtils.degToRad(fovCorrection);
+                const focalLength = height / (2 * Math.tan(fov / 2));
+                const depthScale = 0.5; // Adjust this to control the depth of the cloud
+                const pointCount = width * height;
+                
+                // --- FIX FOR "BLACK HOLE" EFFECT ---
+                // We create temporary arrays because we will be filtering out points,
+                // so the final vertex count might be less than the total number of pixels.
+                const tempPositions = [];
+                const tempColors = [];
+                const depthThreshold = 0.99; // Ignore pixels in the depth map that are >99% white.
+
+                const centerX = width / 2;
+                const centerY = height / 2;
+
+                for (let i = 0; i < pointCount; i++) {
+                    // Get the grayscale value from the depth map
+                    const grayscale = depthImageData[i * 4] / 255;
+                    
+                    // If the point is too close (too white), skip it to avoid the distortion.
+                    if (grayscale > depthThreshold) {
+                        continue;
+                    }
+
+                    // Lighter = closer, darker = further. Invert the value to get Z.
+                    const z = (1.0 - grayscale) * 255 * depthScale;
+                    
+                    // Get the pixel's 2D coordinates
+                    const u = i % width;
+                    const v = Math.floor(i / width);
+
+                    // Unproject the 2D pixel into 3D space
+                    const x = (u - centerX) * (z / focalLength);
+                    const y = (v - centerY) * (z / focalLength);
+                    
+                    const colorIdx = i * 4;
+
+                    tempPositions.push(x, -y, -z);
+                    
+                    // Get color from the rgb.png image data
+                    tempColors.push(
+                        colorImageData[colorIdx] / 255,      // R
+                        colorImageData[colorIdx + 1] / 255,  // G
+                        colorImageData[colorIdx + 2] / 255   // B
+                    );
+                }
+                
+                const positions = new Float32Array(tempPositions);
+                const colors = new Float32Array(tempColors);
+
+                // If point cloud doesn't exist, create it
+                if (!pointCloud) {
+                    const geometry = new THREE.BufferGeometry();
+                    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                    
+                    const material = new THREE.PointsMaterial({
+                        size: 1.0,
+                        vertexColors: true,
+                        sizeAttenuation: true // Points get smaller with distance
+                    });
+                    
+                    pointCloud = new THREE.Points(geometry, material);
+                    scene.add(pointCloud);
+                } else {
+                    // Because the number of points changes when filtering, we must dispose of the old
+                    // geometry and create a new one. Simply updating attributes is not enough.
+                    pointCloud.geometry.dispose();
+                    const newGeometry = new THREE.BufferGeometry();
+                    newGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                    newGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                    pointCloud.geometry = newGeometry;
+                }
+            }
+            
+            // Initial generation
+            generatePointCloud(parseFloat(fovSlider.value));
+            
+            // --- EVENT LISTENERS ---
+            fovSlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                fovValue.textContent = val;
+                if (camera === perspectiveCamera) {
+                    perspectiveCamera.fov = val;
+                    perspectiveCamera.updateProjectionMatrix();
+                }
+                generatePointCloud(val); // Regenerate only for geometry scale matching perceived perspective
+            });
+
+            function updateRotation() {
+                const rotX = THREE.MathUtils.degToRad(rotXSlider.value);
+                const rotY = THREE.MathUtils.degToRad(rotYSlider.value);
+                const rotZ = THREE.MathUtils.degToRad(rotZSlider.value);
+                if (pointCloud) {
+                    pointCloud.rotation.set(rotX, rotY, rotZ);
+                }
+                rotXValue.textContent = rotXSlider.value;
+                rotYValue.textContent = rotYSlider.value;
+                rotZValue.textContent = rotZSlider.value;
+            }
+            
+            rotXSlider.addEventListener('input', updateRotation);
+            rotYSlider.addEventListener('input', updateRotation);
+            rotZSlider.addEventListener('input', updateRotation);
+
+            // --- CUBOID ORIENTATION CONTROLS ---
+            // Update cuboid orientation using Euler rotations (XYZ order) from sliders.
+            function updateCuboidOrientation() {
+                const x = THREE.MathUtils.degToRad(cuboidRotX.value);
+                const y = THREE.MathUtils.degToRad(cuboidRotY.value);
+                const z = THREE.MathUtils.degToRad(cuboidRotZ.value);
+                cuboid.rotation.set(x, y, z, 'XYZ');
+                cuboidRotXValue.textContent = cuboidRotX.value;
+                cuboidRotYValue.textContent = cuboidRotY.value;
+                cuboidRotZValue.textContent = cuboidRotZ.value;
+            }
+            cuboidRotX.addEventListener('input', updateCuboidOrientation);
+            cuboidRotY.addEventListener('input', updateCuboidOrientation);
+            cuboidRotZ.addEventListener('input', updateCuboidOrientation);
+            updateCuboidOrientation(); // initialize display
+            
+            // Projection toggle logic
+            orthoToggle.addEventListener('change', () => {
+                const target = controls.target.clone();
+                const prevPos = camera.position.clone();
+                controls.dispose();
+                // Rebuild transform controls after camera switch
+                transformControls.dispose();
+                scene.remove(transformControls);
+                if (orthoToggle.checked) {
+                    camera = orthoCamera;
+                    projectionHint.textContent = 'Orthographic active';
+                    fovSlider.disabled = true;
+                } else {
+                    camera = perspectiveCamera;
+                    projectionHint.textContent = 'Perspective active';
+                    fovSlider.disabled = false;
+                }
+                camera.position.copy(prevPos);
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.target.copy(target);
+                controls.update();
+
+                transformControls = new TransformControls(camera, renderer.domElement);
+                transformControls.setMode('translate');
+                transformControls.setTranslationSnap(1);
+                transformControls.addEventListener('dragging-changed', (e) => {
+                    controls.enabled = !e.value;
+                });
+                if (selectedObject) transformControls.attach(selectedObject);
+                scene.add(transformControls);
+            });
+
+            // Hide loading overlay
+            loadingOverlay.style.opacity = '0';
+            setTimeout(() => loadingOverlay.style.display = 'none', 500);
+        };
+
+        // This function runs if any file fails to load
+        manager.onError = (url) => {
+            console.error('There was an error loading ' + url);
+            loadingOverlay.textContent = `Error: Could not load ${url}`;
+        };
+
+
+        // --- RENDER LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // only required if controls.enableDamping = true
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- WINDOW RESIZE HANDLING ---
+        window.addEventListener('resize', () => {
+            const aspect = window.innerWidth / window.innerHeight;
+            perspectiveCamera.aspect = aspect;
+            perspectiveCamera.updateProjectionMatrix();
+            orthoCamera.left = (-frustumSize * aspect) / 2;
+            orthoCamera.right = (frustumSize * aspect) / 2;
+            orthoCamera.top = frustumSize / 2;
+            orthoCamera.bottom = -frustumSize / 2;
+            orthoCamera.updateProjectionMatrix();
+            // No need to adjust camera variable; rendering uses active reference
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
+
+
