@@ -1,52 +1,35 @@
 import { useState } from 'react'
 import {
-  Undo,
-  Redo,
   Paintbrush,
   Eraser,
-  ChevronDown,
   Send
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useDrawing } from '../contexts/DrawingContext'
 
-export function FloatingBar() {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+export function FloatingBar({ onGenerate }) {
+  console.log('FloatingBar rendered with onGenerate:', typeof onGenerate, onGenerate)
   const [inputValue, setInputValue] = useState('')
   const { isDrawingMode, setIsDrawingMode, isEraserMode, setIsEraserMode } = useDrawing()
 
-  const dropdownOptions = [
-    { label: 'Export as PNG', value: 'png' },
-    { label: 'Export as SVG', value: 'svg' },
-    { label: 'Export as PDF', value: 'pdf' },
-    { label: 'Share Link', value: 'share' },
-  ]
-
   const handleSend = () => {
-    if (inputValue.trim()) {
-      console.log('Sending:', inputValue)
+    console.log('Send button clicked')
+    console.log('inputValue:', inputValue)
+    console.log('onGenerate:', typeof onGenerate, onGenerate)
+
+    if (inputValue.trim() && onGenerate) {
+      console.log('Generating with prompt:', inputValue.trim())
+      onGenerate(inputValue.trim())
       setInputValue('')
+    } else if (!inputValue.trim()) {
+      console.log('No input text')
+    } else if (!onGenerate) {
+      console.log('onGenerate function not available')
     }
   }
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-card rounded-xl shadow-lg border border-border p-2 flex items-center gap-2 z-50">
-      <div className="flex items-center gap-1 pr-2 border-r border-border">
-        <button
-          className="p-2 hover:bg-accent rounded-lg transition-colors group"
-          title="Undo"
-        >
-          <Undo className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
-        </button>
-
-        <button
-          className="p-2 hover:bg-accent rounded-lg transition-colors group"
-          title="Redo"
-        >
-          <Redo className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
-        </button>
-      </div>
-
       <button
         onClick={() => {
           setIsDrawingMode(!isDrawingMode)
@@ -88,36 +71,6 @@ export function FloatingBar() {
             : "text-muted-foreground group-hover:text-foreground"
         )} />
       </button>
-
-      <div className="relative pl-2 border-l border-border">
-        <button
-          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          className="px-3 py-2 hover:bg-accent rounded-lg transition-colors flex items-center gap-2 text-sm text-foreground"
-        >
-          <span>Options</span>
-          <ChevronDown className={cn(
-            "w-4 h-4 transition-transform",
-            isDropdownOpen && "rotate-180"
-          )} />
-        </button>
-
-        {isDropdownOpen && (
-          <div className="absolute bottom-full left-0 mb-2 bg-card rounded-lg shadow-lg border border-border py-1 min-w-[150px]">
-            {dropdownOptions.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => {
-                  console.log('Selected:', option.value)
-                  setIsDropdownOpen(false)
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent transition-colors"
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
 
       <div className="flex items-center gap-2 pl-2 border-l border-border">
         <input

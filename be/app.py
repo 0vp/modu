@@ -31,54 +31,138 @@ CACHE_FILE = os.path.join(DATA_FOLDER, 'db.json')
 if not os.path.exists(DATA_FOLDER):
     os.makedirs(DATA_FOLDER)
 
+def color_distance(color1, color2):
+    """
+    Calculate perceptual color distance between two hex colors.
+    Returns a value between 0 (identical) and ~765 (maximum difference).
+    """
+    # Convert hex to RGB
+    r1 = int(color1[0:2], 16)
+    g1 = int(color1[2:4], 16)
+    b1 = int(color1[4:6], 16)
+
+    r2 = int(color2[0:2], 16)
+    g2 = int(color2[2:4], 16)
+    b2 = int(color2[4:6], 16)
+
+    # Calculate weighted Euclidean distance (human eye is more sensitive to green)
+    # Using weights that account for human perception
+    r_weight = 2 if (r1 + r2) / 2 > 128 else 3
+    g_weight = 4
+    b_weight = 2 if (r1 + r2) / 2 <= 128 else 3
+
+    distance = math.sqrt(
+        r_weight * (r1 - r2) ** 2 +
+        g_weight * (g1 - g2) ** 2 +
+        b_weight * (b1 - b2) ** 2
+    )
+
+    return distance
+
+def get_existing_colors():
+    """
+    Get all existing color IDs from the cache
+    """
+    cache = load_cache()
+    existing_colors = set()
+
+    for item in cache.values():
+        products = item.get('products', [])
+        for product in products:
+            color_id = product.get('id')
+            if color_id and len(color_id) == 6:
+                existing_colors.add(color_id)
+
+    return existing_colors
+
 def generate_bright_color_id(product_unique):
     """
-    Generate a 6-character hex color code that's bright and vibrant
+    Generate a 6-character hex color code that's bright, vibrant, and unique
     """
-    # Generate initial hash
-    base_hash = hashlib.md5(product_unique.encode()).hexdigest()
-    
-    # Extract RGB components from first 6 chars
-    r = int(base_hash[:2], 16)
-    g = int(base_hash[2:4], 16)
-    b = int(base_hash[4:6], 16)
-    
-    # Ensure brightness: at least one channel > 200, and total > 400
-    max_val = max(r, g, b)
-    if max_val < 200:
-        # Scale up the brightest channel
-        scale = 220 / max_val
-        r = min(255, int(r * scale))
-        g = min(255, int(g * scale))
-        b = min(255, int(b * scale))
-    
-    # Ensure vibrancy (avoid grays)
-    if abs(r - g) < 30 and abs(g - b) < 30 and abs(r - b) < 30:
-        # Boost the dominant color from hash
-        hash_val = int(base_hash[6:8], 16)
-        if hash_val % 3 == 0:
-            r = min(255, r + 80)
-            g = max(0, g - 20)
-            b = max(0, b - 20)
-        elif hash_val % 3 == 1:
-            g = min(255, g + 80)
-            r = max(0, r - 20)
-            b = max(0, b - 20)
-        else:
-            b = min(255, b + 80)
-            r = max(0, r - 20)
-            g = max(0, g - 20)
-    
-    # Ensure total brightness
-    total = r + g + b
-    if total < 400:
-        # Boost all channels proportionally
-        boost = (450 - total) / 3
-        r = min(255, int(r + boost))
-        g = min(255, int(g + boost))
-        b = min(255, int(b + boost))
-    
-    return f"{r:02x}{g:02x}{b:02x}"
+    # Get existing colors to avoid collisions
+    existing_colors = get_existing_colors()
+
+    # Minimum distance threshold to consider colors different enough
+    MIN_COLOR_DISTANCE = 100  # Adjust this for more/less distinction
+
+    # Try up to 50 variations to find a unique color
+    for attempt in range(50):
+        # Generate initial hash with attempt number for variation
+        hash_input = f"{product_unique}_{attempt}" if attempt > 0 else product_unique
+        base_hash = hashlib.md5(hash_input.encode()).hexdigest()
+
+        # Extract RGB components from hash
+        r = int(base_hash[:2], 16)
+        g = int(base_hash[2:4], 16)
+        b = int(base_hash[4:6], 16)
+
+        # Ensure brightness: at least one channel > 200, and total > 400
+        max_val = max(r, g, b)
+        if max_val < 200:
+            # Scale up the brightest channel
+            scale = 220 / max_val
+            r = min(255, int(r * scale))
+            g = min(255, int(g * scale))
+            b = min(255, int(b * scale))
+
+        # Ensure vibrancy (avoid grays)
+        if abs(r - g) < 30 and abs(g - b) < 30 and abs(r - b) < 30:
+            # Boost the dominant color from hash
+            hash_val = int(base_hash[6:8], 16)
+            boost_index = (hash_val + attempt) % 3
+            if boost_index == 0:
+                r = min(255, r + 80)
+                g = max(0, g - 30)
+                b = max(0, b - 30)
+            elif boost_index == 1:
+                g = min(255, g + 80)
+                r = max(0, r - 30)
+                b = max(0, b - 30)
+            else:
+                b = min(255, b + 80)
+                r = max(0, r - 30)
+                g = max(0, g - 30)
+
+        # Add variation based on attempt number for more diversity
+        if attempt > 0:
+            # Rotate hue slightly with each attempt
+            rotation = (attempt * 30) % 360
+            # Simple hue rotation approximation
+            if rotation < 120:
+                r = min(255, r + rotation // 3)
+                g = max(0, g - rotation // 6)
+            elif rotation < 240:
+                g = min(255, g + (rotation - 120) // 3)
+                b = max(0, b - (rotation - 120) // 6)
+            else:
+                b = min(255, b + (rotation - 240) // 3)
+                r = max(0, r - (rotation - 240) // 6)
+
+        # Ensure total brightness
+        total = r + g + b
+        if total < 400:
+            # Boost all channels proportionally
+            boost = (450 - total) / 3
+            r = min(255, int(r + boost))
+            g = min(255, int(g + boost))
+            b = min(255, int(b + boost))
+
+        # Generate the color ID
+        color_id = f"{r:02x}{g:02x}{b:02x}"
+
+        # Check if this color is sufficiently different from existing colors
+        is_unique = True
+        for existing_color in existing_colors:
+            if color_distance(color_id, existing_color) < MIN_COLOR_DISTANCE:
+                is_unique = False
+                break
+
+        if is_unique:
+            return color_id
+
+    # If we couldn't find a unique color after 50 attempts,
+    # return the last generated one (better than nothing)
+    return color_id
 
 def get_contrast_color(hex_color):
     """
@@ -193,10 +277,11 @@ def create_product_collage_sync(products, url_hash):
                 print(f"Error loading image {img_url}: {e}")
                 continue
         
-        # Save collage
+        # Save collage with optimized JPEG compression
         image_filename = f"{url_hash}.jpg"
         image_path = os.path.join(DATA_FOLDER, image_filename)
-        collage.save(image_path, 'JPEG', quality=95)
+        # Use JPEG with optimized quality for smaller file size
+        collage.save(image_path, 'JPEG', quality=85, optimize=True)
         
         # Update cache with collage path
         cache = load_cache()
@@ -471,11 +556,16 @@ def analyze_products(scraped_data, url):
 def save_canvas():
     """
     Save canvas images (original and annotated) to product_data folder
+    Optionally append multiple collage images at specified positions
 
     Expected JSON body:
     {
         "original_image": "data:image/...",  # Base64 encoded original image
         "annotated_image": "data:image/...",  # Base64 encoded annotated image
+        "collages": [  # Array of collages with their positions
+            {"path": "/path/to/collage1.jpg", "x": 100, "y": 200},
+            {"path": "/path/to/collage2.jpg", "x": 300, "y": 400}
+        ]
     }
     """
     try:
@@ -506,6 +596,58 @@ def save_canvas():
         annotated_filename = f"annotated_{timestamp}_{unique_id}.png"
         annotated_path = os.path.join(DATA_FOLDER, annotated_filename)
 
+        # Check if we need to append collages
+        collages = data.get('collages', [])
+        collages_appended = 0
+        collage_positions = []
+
+        # Configurable scale factor for collage size (0.5 = 50%, 0.75 = 75%, 1.0 = 100%)
+        COLLAGE_SCALE_FACTOR = 0.75  # Adjust this to control collage size
+
+        if collages:
+            # Load annotated image
+            annotated_img = Image.open(BytesIO(annotated_bytes))
+
+            # Process each collage
+            for collage_data in collages:
+                collage_path = collage_data.get('path')
+                center_x = collage_data.get('x', 0)
+                center_y = collage_data.get('y', 0)
+
+                # Check if collage exists and load it
+                if collage_path and os.path.exists(collage_path):
+                    try:
+                        collage_img = Image.open(collage_path)
+
+                        # Resize collage based on scale factor
+                        base_max_size = 400  # Base maximum dimension
+                        max_size = int(base_max_size * COLLAGE_SCALE_FACTOR)
+                        collage_img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+                        # Calculate position to center collage at specified point
+                        paste_x = int(center_x - collage_img.width // 2)
+                        paste_y = int(center_y - collage_img.height // 2)
+
+                        # Ensure paste position is within bounds
+                        paste_x = max(0, min(paste_x, annotated_img.width - collage_img.width))
+                        paste_y = max(0, min(paste_y, annotated_img.height - collage_img.height))
+
+                        # Paste collage onto annotated image
+                        annotated_img.paste(collage_img, (paste_x, paste_y))
+
+                        collages_appended += 1
+                        collage_positions.append({"x": round(center_x), "y": round(center_y)})
+                        print(f"  Collage {collages_appended} appended at position ({center_x:.0f}, {center_y:.0f})")
+
+                    except Exception as e:
+                        print(f"  Error loading collage {collage_path}: {e}")
+
+            if collages_appended > 0:
+                # Save the modified annotated image
+                output_buffer = BytesIO()
+                annotated_img.save(output_buffer, format='PNG')
+                annotated_bytes = output_buffer.getvalue()
+
         with open(annotated_path, 'wb') as f:
             f.write(annotated_bytes)
 
@@ -513,7 +655,7 @@ def save_canvas():
         print(f"  Original: {original_filename}")
         print(f"  Annotated: {annotated_filename}")
 
-        return jsonify({
+        response_data = {
             "success": True,
             "original_path": os.path.abspath(original_path),
             "annotated_path": os.path.abspath(annotated_path),
@@ -522,7 +664,16 @@ def save_canvas():
                 "annotated": annotated_filename
             },
             "timestamp": datetime.now().isoformat()
-        })
+        }
+
+        # Add collage info if any were appended
+        if collages_appended > 0:
+            response_data["collages_appended"] = collages_appended
+            response_data["collage_positions"] = collage_positions
+        else:
+            response_data["collages_appended"] = 0
+
+        return jsonify(response_data)
 
     except Exception as e:
         print(f"[{datetime.now().isoformat()}] Error saving canvas: {str(e)}")
@@ -603,6 +754,36 @@ def generate():
     - URLs (e.g., "https://example.com/image.jpg")
     - Mix of both
     """
+
+    # # TEMP - use a predefined response for testing
+    # data = {
+    #     "success": True,
+    #     "images": [
+    #         {
+    #             "content_type": "image/png",
+    #             "file_name": "test_image.png",
+    #             "file_size": 380585,
+    #             "height": None,
+    #             "url": "https://tse2.mm.bing.net/th/id/OIP.dXlAF8AlsisNUGWuiD0pWgHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
+    #             "width": None
+    #         }
+    #     ],
+    #     "metadata": {
+    #         "has_nsfw_content": False,
+    #         "model": "fal-ai/bytedance/seedream/v4/edit",
+    #         "prompt": "test prompt for temporary response",
+    #         "seed": 47968661
+    #     },
+    #     "timing": {
+    #         "fal_api_duration": 2.5,
+    #         "total_duration": 3.0,
+    #         "overhead": 0.5,
+    #         "timestamp": datetime.now().isoformat()
+    #     }
+    # }
+
+    # return jsonify(data)
+
     try:
         # Start timing
         start_time = time.time()

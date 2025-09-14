@@ -1,4 +1,4 @@
-import { Menu, Home, Play, Sun, Moon } from 'lucide-react'
+import { Menu, Home, Sun, Moon } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -44,11 +44,6 @@ export function Navbar({ hasChanges, uploadedImage }) {
             )}
           </div>
         )}
-
-        <button className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md flex items-center gap-2 text-sm font-medium transition-colors">
-          <Play className="w-4 h-4" />
-          Temp View 3D
-        </button>
 
         <button
           onClick={toggleTheme}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Navbar } from './components/Navbar'
 import { Sidebar } from './components/Sidebar'
 import { Canvas } from './components/Canvas'
@@ -12,6 +12,12 @@ function App() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
   const [hasCanvasChanges, setHasCanvasChanges] = useState(false)
   const [uploadedImage, setUploadedImage] = useState(null)
+  const [canvasGenerateFunction, setCanvasGenerateFunction] = useState(null)
+
+  // Debug logging
+  useEffect(() => {
+    console.log('App: canvasGenerateFunction updated:', typeof canvasGenerateFunction, canvasGenerateFunction)
+  }, [canvasGenerateFunction])
 
   const handleFurnitureClick = (furniture) => {
     setSelectedFurniture(furniture)
@@ -32,10 +38,11 @@ function App() {
               setHasChanges={setHasCanvasChanges}
               uploadedImage={uploadedImage}
               setUploadedImage={setUploadedImage}
+              onGenerateRequest={setCanvasGenerateFunction}
             />
           </div>
 
-          <FloatingBar />
+          <FloatingBar onGenerate={canvasGenerateFunction} />
 
           <FurnitureDetailsModal
             isOpen={isDetailsModalOpen}
