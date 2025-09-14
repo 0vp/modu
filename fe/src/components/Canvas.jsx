@@ -311,39 +311,37 @@ export function Canvas({ onFurnitureClick, hasChanges, setHasChanges, uploadedIm
                             }
                         })
 
-                        // Build prompt structure exactly as specified
                         const prompt = {
-                            task: "interior-design-furniture-placement",
-                            "personality": "You are an interior design engineer who combines technical precision with creative vision to create spaces that are both functional and aesthetically pleasing. You integrate engineering principles with modern interior design trends, ensuring every recommendation balances safety, practicality, and sustainability while enhancing visual harmony and user experience.",
-                            inputs: {
-                                "Image 1": "Base image (empty room / existing layout) – to be used as foundation with exact angle, lighting, and framing.",
-                                "Image 2": "Annotated version of Image 1 with colored circles and product collages overlayed at circle centers – shows which products to place and general placement zones.",
-                                "product_images": "Each product image corresponding to collages in Image 2 – full sized, showing how product looks and how it functions in real world."
+                            "task": "interior-design-furniture-placement",
+                            "personality": "You are a visual effects and compositing expert with an engineering mindset. Your specialty is integrating 3D objects into existing photographic plates with absolute photorealism. You meticulously analyze perspective, lighting, and physics to create a seamless final image where the added elements are indistinguishable from the original scene.",
+                            "inputs": {
+                                "Image 1": "The base photograph of the room. This is the foundational reality that must be perfectly matched.",
+                                "Image 2": "An annotated version of Image 1 with placement guides and product collages.",
+                                "product_images": "High-resolution images of the products to be integrated."
                             },
-                            instructions: "Use Image 1 as the base. From Image 2, extract each product collage and place that product into Image 1 at the center of the corresponding colored circle. Match perspective, lighting, scale (pitch/yaw/roll, x/y/z position) to the room’s camera and vanishing points. If product overlaps existing furniture in a way that makes it physically impossible or unnatural, either remove the conflicting furniture or choose a better placement. If part of product would fall outside frame, it’s acceptable—show as much as fits naturally. Decide whether to replace or add each product depending on spatial flow and visual harmony. Remove all annotations (circles, collages) in the final rendered output so only the room with integrated furniture remains.",
-                            rules: [
-                                "Use image 0 (base) as foundation; image 1 shows placement guides with product collages.",
-                                "Ensure that the output image is exactly as if a camera took it, no extra titles, borders, overlayed images, etc. The output image should be exactly the same as the annotated image, but with the products placed in the correct positions.",
-                                "Furniture collages at circle centers show exact products to place—extract and use those full-sized product images.",
-                                "Colored circles mark placement zones—replace existing furniture or fill empty space in those zones.",
-                                "Match room’s perspective, scale, lighting, and orientation; ignore collage sizes or color of circles when placing products.",
-                                "Remove ALL annotations (circles, collages, guides) from final image—only show the final room with furniture integrated.",
-                                "Ensure photorealistic integration: proper shadows, reflections, material texture, lighting consistency.",
-                                "Ensure all add furniture are exactly like the reference furniture, product, artworks."
+                            "instructions": "Your task is to integrate the specified furniture into the base image with absolute realism. Remove the placeholder furniture and execute the following Photorealistic Integration Protocol: Analyze Image 1’s geometry by identifying the vanishing points, especially the main convergence point near the middle of the image where all perspective lines lead, and align all added furniture so its verticals, horizontals, and rear planes match these lines. Scale each item using nearby architectural elements (doors, windows, baseboards) as reference so proportions are accurate. Match the room’s lighting direction, color, and softness, ensuring surfaces facing the light show highlights while shaded areas remain consistent. Add subtle contact shadows under every leg/base, ambient occlusion where objects meet walls or floors, and soft cast shadows that follow the room’s lighting. Finally, remove all annotations and guides to output a seamless, photorealistic image of the furnished room.",
+                            "rules": [
+                                "Use image 0 as the unchangeable base canvas.",
+                                "The final output must be a single, clean image with no borders, text, or artifacts. It must look like a real photograph.",
+                                "The product shown in the collage on image 1 is the exact product to be used. Use the full-sized product image for integration.",
+                                "The colored circles are for initial position guidance only. The final placement must be dictated by physical realism and alignment with the room, but the placement should still be centered around the colored circle(s).",
+                                "The final image MUST NOT have a 'pasted on' or 'floating' appearance. Adherence to the Integration Protocol is mandatory.",
+                                "Remove ALL annotations from the final image. Only the seamlessly integrated furniture in the room should be visible."
                             ],
                             images: [
-                                {
-                                    index: 0,
-                                    role: "base",
-                                    path: result.original_path
-                                },
-                                {
-                                    index: 1,
-                                    role: "annotated-with-collages",
-                                    path: result.annotated_path
-                                }
+                              {
+                                index: 0,
+                                role: "base",
+                                path: result.original_path
+                              },
+                              {
+                                index: 1,
+                                role: "annotated-with-collages",
+                                path: result.annotated_path
+                              }
                             ]
                         }
+                          
 
                         // Add product images and details (starting from index 2)
                         let imageIndex = 2
